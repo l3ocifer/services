@@ -1,0 +1,33 @@
+---
+- name: Test AWS server provisioning
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  pre_tasks:
+    - name: Verify AWS credentials
+      ansible.builtin.command: aws sts get-caller-identity
+      changed_when: false
+      register: aws_check
+      failed_when: aws_check.rc != 0
+
+  tasks:
+    - name: Set AWS region
+      ansible.builtin.set_fact:
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1', true) }}"
+
+    - name: Perform cleanup
+      ansible.builtin.include_role:
+        name: aws-cloudlab
+        tasks_from: cleanup
+      when: cleanup_enabled | bool
+      tags: cleanup
+      vars:
+        force_cleanup: true
+        deployment_type: test
+
+    - name: Run AWS cloudlab role
+      ansible.builtin.include_role:
+        name: aws-cloudlab
+      when: not cleanup_enabled | bool
+      tags: deploy 

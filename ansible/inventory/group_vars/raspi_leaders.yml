@@ -1,0 +1,29 @@
+# Variables for Raspberry Pi leader nodes
+---
+# Resource limits
+memory_limit: "{{ raspi_memory_limit }}"
+swap_size: "{{ raspi_swap_size }}"
+
+# DNS Services (legion001)
+pihole_enabled: true
+hickory_dns_enabled: true
+dns_upstream_servers:
+  - "1.1.1.1"
+  - "1.0.0.1"
+
+# Authentication (legion002)
+authelia_enabled: true
+authelia_jwt_secret: "{{ vault_authelia_jwt_secret }}"
+vaultwarden_enabled: true
+vaultwarden_domain: "vault.{{ domain_name }}"
+
+# Home Automation (legion003)
+home_assistant_enabled: true
+home_assistant_domain: "home.{{ domain_name }}"
+homekit_bridge_enabled: true
+diyhue_enabled: true
+
+# Shared storage
+nfs_exports:
+  - path: "/data/shared"
+    clients: "192.168.1.0/24(rw,sync,no_root_squash)"

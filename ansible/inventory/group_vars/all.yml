@@ -1,0 +1,48 @@
+# Common variables for all nodes
+---
+# Network settings
+domain_name: "yourdomain.com"  # Replace with your actual domain
+internal_domain: "home.local"
+wireguard_enabled: true
+dns_servers:
+  - "192.168.1.201"  # legion001 (primary DNS)
+  - "1.1.1.1"        # Cloudflare backup
+
+# Security
+fail2ban_enabled: true
+ufw_enabled: true
+cockpit_enabled: true
+
+# Monitoring
+node_exporter_enabled: true
+prometheus_node_exporter_version: "1.7.0"
+
+# Base paths
+data_root: "/data"
+backup_root: "/backup"
+config_root: "/etc/homelab"
+
+# Docker settings
+docker_compose_version: "2.24.0"
+docker_edition: "ce"
+docker_package: "docker-{{ docker_edition }}"
+docker_compose_path: "/usr/local/bin/docker-compose"
+
+# AWS Route53 settings
+aws_region: "us-east-1"
+route53_enabled: true
+
+# Traefik settings
+traefik_enabled: true
+traefik_dashboard_enabled: true
+traefik_dashboard_domain: "traefik.{{ domain_name }}"
+traefik_acme_email: "your.email@example.com"
+
+# Coolify settings
+coolify_enabled: true
+coolify_version: "latest"
+coolify_domain: "coolify.{{ domain_name }}"
+
+# Resource limits
+raspi_memory_limit: "900M"
+raspi_swap_size: "1G"

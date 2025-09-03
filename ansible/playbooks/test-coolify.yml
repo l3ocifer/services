@@ -1,0 +1,29 @@
+---
+- name: Test Coolify deployment on desktop environment
+  hosts: localhost
+  vars:
+    target_env: "desktop"  # Force desktop-sized instance
+    aws_region: "us-east-1"
+    roles_to_test:
+      - coolify
+    cleanup_on_failure: false  # Keep instance for debugging if deployment fails
+
+  pre_tasks:
+    - name: Verify Docker installation
+      command: docker --version
+      changed_when: false
+      register: docker_check
+      failed_when: docker_check.rc != 0
+
+  roles:
+    - role: aws_test_runner
+
+  post_tasks:
+    - name: Display test results
+      debug:
+        msg: |
+          Test Results:
+          Instance Type: {{ selected_instance_type }}
+          Instance IP: {{ test_instance.instances[0].public_ip_address }}
+          Verification Status: {{ verification_result is success }}
+      when: test_instance is defined 

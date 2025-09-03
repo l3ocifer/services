@@ -1,0 +1,1377 @@
+x-name: llm-docker
+
+networks:
+  llm_network:
+    name: llm_network
+    driver: bridge
+
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik-${DOMAIN_BASE}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/config:/etc/traefik/dynamic
+      - ./traefik/certificates:/etc/traefik/certificates
+      - ./traefik/acme.json:/acme.json
+    environment:
+      - TRAEFIK_AUTH=${TRAEFIK_AUTH}
+      - RUSTPAD_AUTH=${RUSTPAD_AUTH}
+      - WEBUI_AUTH=${WEBUI_AUTH}
+      - ACME_EMAIL=${ACME_EMAIL}
+      - DOMAIN=${DOMAIN}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.traefik.address=:8080"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+    labels:
+      - "traefik.enable=true"
+      # Dashboard remote access
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+      # Local/LAN access
+      - "traefik.http.routers.traefik-local.rule=HostRegexp(`{host:(traefik.localhost|traefik.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.traefik-local.entrypoints=web"
+      - "traefik.http.routers.traefik-local.service=api@internal"
+      - "traefik.http.routers.traefik-local.middlewares=local-only@file,security@file"
+    networks:
+      - llm_network
+
+  # Add Home Assistant
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:latest
+    container_name: homeassistant-${DOMAIN_BASE}
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - homeassistant_config:/config
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "8123:8123"
+    environment:
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${HOMEASSISTANT_MEMORY_LIMIT:-2G}
+          cpus: '2'
+        reservations:
+          memory: '512M'
+          cpus: '0.5'
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.homeassistant.rule=Host(`home.${DOMAIN}`)"
+      - "traefik.http.routers.homeassistant.entrypoints=websecure"
+      - "traefik.http.routers.homeassistant.tls.certresolver=letsencrypt"
+      - "traefik.http.services.homeassistant.loadbalancer.server.port=8123"
+      - "traefik.http.routers.homeassistant.service=homeassistant"
+      - "traefik.http.routers.homeassistant.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.homeassistant-local.rule=HostRegexp(`{host:(home.localhost|home.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.homeassistant-local.entrypoints=web"
+      - "traefik.http.services.homeassistant-local.loadbalancer.server.port=8123"
+      - "traefik.http.routers.homeassistant-local.middlewares=local-only@file,security@file"
+
+  #ollama:
+  #  image: ollama/ollama:0.1.38
+  #  container_name: ollama-${DOMAIN_BASE}
+  #  restart: unless-stopped
+  #  volumes:
+  #    - ollama_data:/root/.ollama
+  #  ports:
+  #    - "${OLLAMA_PORT:-11434}:11434"
+  #  environment:
+  #    - OLLAMA_MODELS=${OLLAMA_MODELS:-llama3.2:3b}
+  #  healthcheck:
+  #    test: ["CMD-SHELL", "curl -f http://localhost:11434/api/health || exit 1"]
+  #    interval: 30s
+  #    timeout: 10s
+  #    retries: 3
+  #    start_period: 40s
+  #  deploy:
+  #    resources:
+  #      limits:
+  #        memory: ${OLLAMA_MEMORY_LIMIT:-32G}
+  #        cpus: '8'
+  #      reservations:
+  #        memory: ${OLLAMA_MEMORY_RESERVATION:-16G}
+  #        cpus: '2'
+  #  networks:
+  #    - llm_network
+  #    - coolify_network
+  #  labels:
+  #    - "traefik.enable=true"
+  #    # Remote access
+  #    - "traefik.http.routers.ollama.rule=Host(`api.${DOMAIN}`)"
+  #    - "traefik.http.routers.ollama.entrypoints=websecure"
+  #    - "traefik.http.routers.ollama.tls.certresolver=letsencrypt"
+  #    - "traefik.http.routers.ollama.service=ollama"
+  #    - "traefik.http.routers.ollama.middlewares=security@file"
+  #    # HTTP to HTTPS redirect for external domain
+  #    - "traefik.http.routers.ollama-https-redirect.rule=Host(`api.${DOMAIN}`)"
+  #    - "traefik.http.routers.ollama-https-redirect.entrypoints=web"
+  #    - "traefik.http.routers.ollama-https-redirect.middlewares=https-redirect@docker"
+  #    # Local/LAN access
+  #    - "traefik.http.routers.ollama-local.rule=HostRegexp(`{host:(api.localhost|api.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+  #    - "traefik.http.routers.ollama-local.entrypoints=web"
+  #    - "traefik.http.services.ollama-local.loadbalancer.server.port=11434"
+  #    - "traefik.http.routers.ollama-local.middlewares=local-only@file,security@file"
+
+  webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: webui-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - webui_data:/app/backend/data
+    ports:
+      - "3333:8080"
+    environment:
+      - OLLAMA_API_BASE_URL=http://192.168.1.200:11434/api
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_AUTH=authelia
+      - WEBUI_AUTH_AUTHELIA_URL=https://auth.${DOMAIN}
+      - WEBUI_AUTH_AUTHELIA_HEADER=Remote-User
+      - WEBUI_DB_BACKEND=postgres
+      - WEBUI_DB_URL=postgresql://postgres:${POSTGRES_PASSWORD}@neon-postgres:5432/openwebui
+      - POSTGRES_USER_TABLE=users
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.webui.rule=Host(`chat.${DOMAIN}`)"
+      - "traefik.http.routers.webui.entrypoints=websecure"
+      - "traefik.http.routers.webui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.webui.loadbalancer.server.port=8080"
+      - "traefik.http.routers.webui.service=webui"
+      - "traefik.http.routers.webui.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.webui-local.rule=HostRegexp(`{host:(chat.localhost|chat.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.webui-local.entrypoints=web"
+      - "traefik.http.services.webui-local.loadbalancer.server.port=8080"
+      - "traefik.http.routers.webui-local.middlewares=local-only@file,security@file"
+
+  # Update neon-postgres service to include Traefik labels from neon
+  neon-postgres:
+    image: postgres:16-alpine
+    container_name: neon-postgres-${DOMAIN_BASE}
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./vector/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: ${POSTGRES_MEMORY_LIMIT:-4G}
+          cpus: '2'
+    ports:
+      - "5432:5432"
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Define services
+      - "traefik.http.services.neon-db.loadbalancer.server.port=5432"
+      # Remote access
+      - "traefik.http.routers.neon-db.rule=Host(`db.${DOMAIN}`)"
+      - "traefik.http.routers.neon-db.entrypoints=websecure"
+      - "traefik.http.routers.neon-db.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.neon-db.service=neon-db"
+      - "traefik.http.routers.neon-db.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.neon-db-local.rule=HostRegexp(`{host:(db.localhost|db.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.neon-db-local.entrypoints=web"
+      - "traefik.http.routers.neon-db-local.service=neon-db"
+      - "traefik.http.routers.neon-db-local.middlewares=local-only@file,security@file"
+
+  # Add a Redis cache service for improved performance
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis-nd-${DOMAIN_BASE}
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEMORY_LIMIT:-1G}
+          cpus: '1'
+        reservations:
+          memory: '128M'
+          cpus: '0.2'
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Local/LAN access only
+      - "traefik.http.routers.redis-local.rule=HostRegexp(`{host:(redis.localhost|redis.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.redis-local.entrypoints=web"
+      - "traefik.http.services.redis.loadbalancer.server.port=6379"
+      - "traefik.http.routers.redis-local.service=redis"
+      - "traefik.http.routers.redis-local.middlewares=local-only@file,security@file"
+
+  # Update vector service with improved configuration
+  vector:
+    image: timberio/vector:0.45.0-debian
+    container_name: vector-nd-${DOMAIN_BASE}
+    restart: unless-stopped
+    user: root
+    volumes:
+      - ./vector:/etc/vector
+      - ${DATA_DIR}/vector:/var/lib/vector
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    command: --config /etc/vector/vector.yaml
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD", "sh", "-c", "grep vector /proc/1/cmdline || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=false"  # No need for external access
+
+  rustpad:
+    image: ekzhang/rustpad:latest
+    container_name: rustpad-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "${RUSTPAD_PORT:-3030}:3030"
+    # No healthcheck for this minimal container
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.services.rustpad-service.loadbalancer.server.port=3030"
+      - "traefik.http.routers.rustpad.rule=Host(`pad.${DOMAIN}`)"
+      - "traefik.http.routers.rustpad.entrypoints=websecure"
+      - "traefik.http.routers.rustpad.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.rustpad.service=rustpad-service"
+      - "traefik.http.routers.rustpad.middlewares=rustpad-auth@file,rustpad-ws@docker,security@file"
+      - "traefik.http.middlewares.rustpad-ws.headers.customrequestheaders.Connection=Upgrade"
+      - "traefik.http.middlewares.rustpad-ws.headers.customrequestheaders.Upgrade=websocket"
+      # Local/LAN access
+      - "traefik.http.routers.rustpad-local.rule=HostRegexp(`{host:(pad.localhost|pad.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.rustpad-local.entrypoints=web"
+      - "traefik.http.services.rustpad-local.loadbalancer.server.port=3030"
+      - "traefik.http.routers.rustpad-local.middlewares=rustpad-ws-local@docker,security@file"
+
+  # Add Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    depends_on:
+      - node-exporter
+      - traefik
+      - vector
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: ${MONITORING_MEMORY_LIMIT:-4G}
+          cpus: '2'
+        reservations:
+          memory: '512M'
+          cpus: '0.5'
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.prometheus.rule=Host(`metrics.${DOMAIN}`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+      - "traefik.http.routers.prometheus.service=prometheus"
+      - "traefik.http.routers.prometheus.middlewares=traefik-auth@file,security@file"
+      # Local/LAN access
+      - "traefik.http.routers.prometheus-local.rule=HostRegexp(`{host:(metrics.localhost|metrics.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.prometheus-local.entrypoints=web"
+      - "traefik.http.services.prometheus-local.loadbalancer.server.port=9090"
+      - "traefik.http.routers.prometheus-local.middlewares=local-only@file,security@file"
+
+  # Update Grafana service to use PostgreSQL
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN}
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=neon-postgres
+      - GF_DATABASE_NAME=grafana
+      - GF_DATABASE_USER=postgres
+      - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - GF_ALERTING_ENABLED=false
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 256M
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.http.routers.grafana.service=grafana"
+      - "traefik.http.routers.grafana.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.grafana-local.rule=HostRegexp(`{host:(grafana.localhost|grafana.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.grafana-local.entrypoints=web"
+      - "traefik.http.services.grafana-local.loadbalancer.server.port=3000"
+      - "traefik.http.routers.grafana-local.middlewares=local-only@file,security@file"
+
+  # Add Loki for log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: loki-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.loki.rule=Host(`logs.${DOMAIN}`)"
+      - "traefik.http.routers.loki.entrypoints=websecure"
+      - "traefik.http.routers.loki.tls.certresolver=letsencrypt"
+      - "traefik.http.services.loki.loadbalancer.server.port=3100"
+      - "traefik.http.routers.loki.service=loki"
+      - "traefik.http.routers.loki.middlewares=traefik-auth@file,security@file"
+      # Local/LAN access
+      - "traefik.http.routers.loki-local.rule=HostRegexp(`{host:(logs.localhost|logs.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.loki-local.entrypoints=web"
+      - "traefik.http.services.loki-local.loadbalancer.server.port=3100"
+      - "traefik.http.routers.loki-local.middlewares=local-only@file,security@file"
+
+  # Update authelia service to use neon-postgres
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia-${DOMAIN_BASE}
+    restart: unless-stopped
+    environment:
+      AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET: antidisestablishmentarianism7
+      AUTHELIA_SESSION_SECRET: antidisestablishmentarianism7
+      AUTHELIA_STORAGE_ENCRYPTION_KEY: antidisestablishmentarianism7
+      AUTHELIA_STORAGE_POSTGRES_ADDRESS: tcp://neon-postgres:5432
+      AUTHELIA_STORAGE_POSTGRES_DATABASE: authelia
+      AUTHELIA_STORAGE_POSTGRES_PASSWORD: antidisestablishmentarianism7
+      AUTHELIA_STORAGE_POSTGRES_USERNAME: postgres
+      DOMAIN: ${DOMAIN}
+      LOCAL_DOMAIN: ${LOCAL_DOMAIN:-localhost}
+      LOCAL_IP: ${LOCAL_IP:-127.0.0.1}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Add settings for local access
+      AUTHELIA_SERVER_DISABLE_HEALTHCHECK: "false"
+      AUTHELIA_LOG_LEVEL: debug
+      AUTHELIA_ACCESS_CONTROL_DEFAULT_POLICY: deny
+    volumes:
+      - ./authelia:/config
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9091"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.authelia.rule=Host(`auth.${DOMAIN}`)"
+      - "traefik.http.routers.authelia.entrypoints=websecure"
+      - "traefik.http.routers.authelia.tls.certresolver=letsencrypt"
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+      - "traefik.http.routers.authelia.service=authelia"
+      - "traefik.http.routers.authelia.middlewares=security@file"
+      # Local/LAN access - expanded pattern coverage
+      - "traefik.http.routers.authelia-local.rule=HostRegexp(`{host:(auth.localhost|auth.lan|auth.local|auth.192\\.168\\..*|auth.10\\..*|auth.172\\..*|localhost|lan|local|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
+      - "traefik.http.routers.authelia-local.entrypoints=web"
+      - "traefik.http.services.authelia-local.loadbalancer.server.port=9091"
+      - "traefik.http.routers.authelia-local.middlewares=local-only@file,security@file"
+
+  # Update n8n service to use neon-postgres
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=n8n.${DOMAIN}
+      - N8N_PROTOCOL=https
+      - N8N_PORT=5678
+      - N8N_ENCRYPTION_KEY=${WEBUI_SECRET_KEY}
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=neon-postgres-${DOMAIN_BASE}
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=postgres
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_RELEASE_DATE=2024-03-26T00:00:00Z
+    volumes:
+      - ./n8n/config:/home/node/.n8n
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://0.0.0.0:5678/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 512M
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN}`)"
+      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+      - "traefik.http.routers.n8n.service=n8n"
+      - "traefik.http.routers.n8n.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.n8n-local.rule=HostRegexp(`{host:(n8n.localhost|n8n.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.n8n-local.entrypoints=web"
+      - "traefik.http.services.n8n-local.loadbalancer.server.port=5678"
+      - "traefik.http.routers.n8n-local.middlewares=local-only@file,security@file"
+
+  # Update Uptime Kuma service to use PostgreSQL
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - uptime_kuma_data:/app/data
+    ports:
+      - "3001:3001"
+    environment:
+      - UPTIME_KUMA_POSTGRES_HOST=neon-postgres
+      - UPTIME_KUMA_POSTGRES_PORT=5432
+      - UPTIME_KUMA_POSTGRES_USER=postgres
+      - UPTIME_KUMA_POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - UPTIME_KUMA_POSTGRES_DATABASE=uptimekuma
+      - UPTIME_KUMA_POSTGRES_SSL=false
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.uptime-kuma.rule=Host(`status.${DOMAIN}`)"
+      - "traefik.http.routers.uptime-kuma.entrypoints=websecure"
+      - "traefik.http.routers.uptime-kuma.tls.certresolver=letsencrypt"
+      - "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
+      - "traefik.http.routers.uptime-kuma.service=uptime-kuma"
+      - "traefik.http.routers.uptime-kuma.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.uptime-kuma-local.rule=HostRegexp(`{host:(status.localhost|status.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.uptime-kuma-local.entrypoints=web"
+      - "traefik.http.services.uptime-kuma-local.loadbalancer.server.port=3001"
+      - "traefik.http.routers.uptime-kuma-local.middlewares=local-only@file,security@file"
+
+  # Update vaultwarden service to use neon-postgres
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden-${DOMAIN_BASE}
+    restart: unless-stopped
+    environment:
+      - DOMAIN=https://vault.${DOMAIN}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@neon-postgres:5432/vaultwarden
+      - SIGNUPS_ALLOWED=${VAULTWARDEN_ALLOW_SIGNUPS:-false}
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
+      - WEBSOCKET_ENABLED=true
+      - LOG_LEVEL=warn
+    volumes:
+      - vaultwarden_data:/data
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.vaultwarden.rule=Host(`vault.${DOMAIN}`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+      - "traefik.http.routers.vaultwarden.service=vaultwarden"
+      - "traefik.http.routers.vaultwarden.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.vaultwarden-local.rule=HostRegexp(`{host:(vault.localhost|vault.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.vaultwarden-local.entrypoints=web"
+      - "traefik.http.services.vaultwarden-local.loadbalancer.server.port=80"
+      - "traefik.http.routers.vaultwarden-local.middlewares=local-only@file,security@file"
+      # Websocket support
+      - "traefik.http.routers.vaultwarden-ws.rule=Host(`vault.${DOMAIN}`) && Path(`/notifications/hub`)"
+      - "traefik.http.routers.vaultwarden-ws.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden-ws.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vaultwarden-ws.loadbalancer.server.port=3012"
+      - "traefik.http.routers.vaultwarden-ws.service=vaultwarden-ws"
+
+  # Update conduit service with proper configuration
+  conduit:
+    image: matrixconduit/matrix-conduit:latest
+    container_name: conduit-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "6167:6167"
+    volumes:
+      - ./conduit/conduit.toml:/etc/conduit.toml:ro
+      - matrix_data:/var/lib/matrix-conduit
+    environment:
+      - CONDUIT_CONFIG=/etc/conduit.toml
+      - CONDUIT_SERVER_NAME=${DOMAIN}
+      - CONDUIT_DATABASE_BACKEND=rocksdb
+      - CONDUIT_DATABASE_PATH=/var/lib/matrix-conduit/conduit_db
+      - CONDUIT_ALLOW_REGISTRATION=false
+      - CONDUIT_ALLOW_FEDERATION=true
+      - CONDUIT_MAX_REQUEST_SIZE=20000000
+      - CONDUIT_TRUSTED_SERVERS=["matrix.org"]
+      - CONDUIT_ADDRESS=0.0.0.0
+      - CONDUIT_PORT=6167
+      - DOMAIN=${DOMAIN}
+      - LOCAL_DOMAIN=${LOCAL_DOMAIN:-localhost}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6167/_matrix/client/versions"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.conduit.rule=Host(`matrix.${DOMAIN}`)"
+      - "traefik.http.routers.conduit.entrypoints=websecure"
+      - "traefik.http.routers.conduit.tls.certresolver=letsencrypt"
+      - "traefik.http.services.conduit.loadbalancer.server.port=6167"
+      - "traefik.http.routers.conduit.middlewares=security@file"
+      # Local/LAN access with improved patterns
+      - "traefik.http.routers.conduit-local.rule=HostRegexp(`{host:(matrix.localhost|matrix.lan|matrix.local|matrix.192\\.168\\..*|matrix.10\\..*|matrix.172\\..*|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
+      - "traefik.http.routers.conduit-local.entrypoints=web"
+      - "traefik.http.services.conduit-local.loadbalancer.server.port=6167"
+      - "traefik.http.routers.conduit-local.middlewares=local-only@file,security@file"
+
+  # Update spacedrive service with auth configuration
+  spacedrive:
+    image: ghcr.io/spacedriveapp/spacedrive/server:latest
+    container_name: spacedrive-${DOMAIN_BASE}
+    restart: unless-stopped
+    environment:
+      - SD_AUTH=disabled  # Set to disabled for now, can be changed to username:password later
+      - SD_P2P_PORT=7373  # Explicitly set the P2P port
+      - SD_P2P_ENABLED=true  # Enable P2P functionality
+    volumes:
+      - spacedrive_data:/data
+      - ${DATA_DIR:-/mnt/data}/shared:/media:ro
+    ports:
+      - "8081:8080"  # Changed from 8080:8080 to avoid port conflict
+      - "7373:7373"  # Expose the P2P port
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.spacedrive.rule=Host(`drive.${DOMAIN}`)"
+      - "traefik.http.routers.spacedrive.entrypoints=websecure"
+      - "traefik.http.routers.spacedrive.tls.certresolver=letsencrypt"
+      - "traefik.http.services.spacedrive.loadbalancer.server.port=8080"
+      - "traefik.http.routers.spacedrive.service=spacedrive"
+      - "traefik.http.routers.spacedrive.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.spacedrive-local.rule=HostRegexp(`{host:(drive.localhost|drive.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.spacedrive-local.entrypoints=web"
+      - "traefik.http.services.spacedrive-local.loadbalancer.server.port=8080"
+      - "traefik.http.routers.spacedrive-local.middlewares=local-only@file,security@file"
+
+  # Coolify - Self-hosted Heroku / Netlify / Vercel alternative
+  # Note: After setup, create a manual entry in "Keys & Tokens" menu for 
+  # id.root@host.docker.internal SSH key to resolve the PrivateKey model error
+  coolify:
+    container_name: coolify-${DOMAIN_BASE}
+    image: ghcr.io/coollabsio/coolify:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8080"  # Map external port 8000 to internal port 8080
+      - "6001:6001"  # Websocket port
+      - "6002:6002"  # Terminal port
+    environment:
+      - APP_URL=https://coolify.${DOMAIN}
+      - APP_KEY=${COOLIFY_APP_KEY}
+      - APP_ENV=production
+      - APP_CIPHER=aes-256-cbc
+      - DB_CONNECTION=pgsql
+      - DB_HOST=neon-postgres
+      - DB_PORT=5432
+      - DB_DATABASE=coolify
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - INTERNAL_WEBSERVER=true  # Use internal Nginx server on port 8080
+      - ROOT_PASSWORD=${COOLIFY_PASSWORD}
+    volumes:
+      - coolify_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DATA_DIR:-/mnt/data}/coolify/ssh/keys:/var/www/.ssh/keys:ro
+      - ${DATA_DIR:-/mnt/data}/coolify/ssh/config:/var/www/.ssh/config:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - llm_network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.coolify.rule=Host(`coolify.${DOMAIN}`)
+      - traefik.http.routers.coolify.entrypoints=websecure
+      - traefik.http.routers.coolify.tls=true
+      - traefik.http.routers.coolify.tls.certresolver=letsencrypt
+      - traefik.http.services.coolify.loadbalancer.server.port=8080
+      - traefik.docker.network=llm_network
+      # Websocket handling
+      - traefik.http.routers.coolify-ws.rule=Host(`coolify.${DOMAIN}`) && PathPrefix(`/socket.io`)
+      - traefik.http.routers.coolify-ws.entrypoints=websecure
+      - traefik.http.routers.coolify-ws.tls=true
+      - traefik.http.routers.coolify-ws.service=coolify-ws
+      - traefik.http.services.coolify-ws.loadbalancer.server.port=6001
+      # Terminal handling
+      - traefik.http.routers.coolify-terminal.rule=Host(`coolify.${DOMAIN}`) && PathPrefix(`/terminal`)
+      - traefik.http.routers.coolify-terminal.entrypoints=websecure
+      - traefik.http.routers.coolify-terminal.tls=true
+      - traefik.http.routers.coolify-terminal.service=coolify-terminal
+      - traefik.http.services.coolify-terminal.loadbalancer.server.port=6002
+
+  # Add node-exporter service for Prometheus
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter-nd-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Local/LAN access only
+      - "traefik.http.routers.node-exporter-local.rule=HostRegexp(`{host:(metrics-node.localhost|metrics-node.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.node-exporter-local.entrypoints=web"
+      - "traefik.http.services.node-exporter.loadbalancer.server.port=9100"
+      - "traefik.http.routers.node-exporter-local.service=node-exporter"
+      - "traefik.http.routers.node-exporter-local.middlewares=local-only@file,security@file"
+
+  # Update RustDesk to use separate services for hbbs and hbbr
+  rustdesk-hbbs:
+    image: rustdesk/rustdesk-server:latest
+    container_name: rustdesk-hbbs-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - rustdesk_data:/root
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp" 
+      - "21118:21118"
+    command: hbbs -r rustdesk-hbbr-${DOMAIN_BASE}:21117
+    networks:
+      - llm_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.rustdesk.rule=Host(`remote.${DOMAIN}`)"
+      - "traefik.http.routers.rustdesk.entrypoints=websecure"
+      - "traefik.http.routers.rustdesk.tls.certresolver=letsencrypt"
+      - "traefik.http.services.rustdesk.loadbalancer.server.port=21118"
+      - "traefik.http.routers.rustdesk.service=rustdesk"
+      - "traefik.http.routers.rustdesk.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.rustdesk-local.rule=HostRegexp(`{host:(remote.localhost|remote.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.rustdesk-local.entrypoints=web"
+      - "traefik.http.services.rustdesk-local.loadbalancer.server.port=21118"
+      - "traefik.http.routers.rustdesk-local.middlewares=local-only@file,security@file"
+
+  rustdesk-hbbr:
+    image: rustdesk/rustdesk-server:latest
+    container_name: rustdesk-hbbr-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - rustdesk_data:/root
+    ports:
+      - "${RUSTDESK_RELAY_PORT:-21117}:21117"
+      - "21119:21119"
+    command: hbbr
+    networks:
+      - llm_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.rustdesk.rule=Host(`remote.${DOMAIN}`)"
+      - "traefik.http.routers.rustdesk.entrypoints=websecure"
+      - "traefik.http.routers.rustdesk.tls.certresolver=letsencrypt"
+      - "traefik.http.services.rustdesk.loadbalancer.server.port=21118"
+      - "traefik.http.routers.rustdesk.service=rustdesk"
+      - "traefik.http.routers.rustdesk.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.rustdesk-local.rule=HostRegexp(`{host:(remote.localhost|remote.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.rustdesk-local.entrypoints=web"
+      - "traefik.http.services.rustdesk-local.loadbalancer.server.port=21118"
+      - "traefik.http.routers.rustdesk-local.middlewares=local-only@file,security@file"
+
+  # Add Syncthing for file synchronization
+  syncthing:
+    image: syncthing/syncthing:latest
+    container_name: syncthing-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - syncthing_data:/var/syncthing
+    ports:
+      - "8384:8384"
+      - "22000:22000"
+      - "22000:22000/udp"
+      - "21027:21027/udp"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "http://localhost:8384/"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.syncthing.rule=Host(`sync.${DOMAIN}`)"
+      - "traefik.http.routers.syncthing.entrypoints=websecure"
+      - "traefik.http.routers.syncthing.tls.certresolver=letsencrypt"
+      - "traefik.http.services.syncthing.loadbalancer.server.port=8384"
+      - "traefik.http.routers.syncthing.service=syncthing"
+      - "traefik.http.routers.syncthing.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.syncthing-local.rule=HostRegexp(`{host:(sync.localhost|sync.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.syncthing-local.entrypoints=web"
+      - "traefik.http.services.syncthing-local.loadbalancer.server.port=8384"
+      - "traefik.http.routers.syncthing-local.middlewares=local-only@file,security@file"
+
+  # Update postiz service with improved configuration
+  postiz:
+    image: ${POSTIZ_IMAGE:-ghcr.io/gitroomhq/postiz-app:latest}
+    container_name: postiz-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "3000:5000"
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - MAIN_URL=https://notes.${DOMAIN}
+      - FRONTEND_URL=https://notes.${DOMAIN}
+      - NEXT_PUBLIC_BACKEND_URL=https://notes.${DOMAIN}/api
+      - JWT_SECRET=${POSTIZ_JWT_SECRET}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@neon-postgres:5432/postiz
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - BACKEND_INTERNAL_URL=http://localhost:5000
+      - IS_GENERAL=true
+      - STORAGE_PROVIDER=local
+      - UPLOAD_DIRECTORY=/uploads
+      - NEXT_PUBLIC_UPLOAD_DIRECTORY=/uploads
+      - ALLOW_SIGNUP=${POSTIZ_ALLOW_SIGNUP:-false}
+      - MAX_UPLOAD_SIZE=${POSTIZ_MAX_UPLOAD_SIZE:-10}
+      # Add NOT_SECURED for development environments
+      - NOT_SECURED=${POSTIZ_NOT_SECURED:-false}
+      # Add POSTIZ_APPS to control which services start
+      - POSTIZ_APPS=${POSTIZ_APPS:-}
+    volumes:
+      - postiz_data:/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.postiz.rule=Host(`notes.${DOMAIN}`)"
+      - "traefik.http.routers.postiz.entrypoints=websecure"
+      - "traefik.http.routers.postiz.tls=true"
+      - "traefik.http.routers.postiz.tls.certresolver=letsencrypt"
+      - "traefik.http.services.postiz.loadbalancer.server.port=5000"
+      - "traefik.http.routers.postiz.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.postiz-local.rule=HostRegexp(`{host:(notes.localhost|notes.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.postiz-local.entrypoints=web"
+      - "traefik.http.services.postiz-local.loadbalancer.server.port=5000"
+      - "traefik.http.routers.postiz-local.middlewares=local-only@file,security@file"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # Add MinIO for S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    container_name: minio-${DOMAIN_BASE}
+    restart: unless-stopped
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # API Remote access
+      - "traefik.http.routers.minio.rule=Host(`s3.${DOMAIN}`)"
+      - "traefik.http.routers.minio.entrypoints=websecure"
+      - "traefik.http.routers.minio.tls.certresolver=letsencrypt"
+      - "traefik.http.services.minio.loadbalancer.server.port=9000"
+      - "traefik.http.routers.minio.service=minio"
+      - "traefik.http.routers.minio.middlewares=security@file"
+      # Console Remote access
+      - "traefik.http.routers.minio-console.rule=Host(`s3-console.${DOMAIN}`)"
+      - "traefik.http.routers.minio-console.entrypoints=websecure"
+      - "traefik.http.routers.minio-console.tls.certresolver=letsencrypt"
+      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
+      - "traefik.http.routers.minio-console.service=minio-console"
+      - "traefik.http.routers.minio-console.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.minio-local.rule=HostRegexp(`{host:(s3.localhost|s3.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.minio-local.entrypoints=web"
+      - "traefik.http.services.minio-local.loadbalancer.server.port=9000"
+      - "traefik.http.routers.minio-local.middlewares=local-only@file,security@file"
+
+  # Add Huginn for automation
+  huginn:
+    image: ghcr.io/huginn/huginn:latest
+    container_name: huginn-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "3010:3000"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost:3010}
+      - PORT=3000
+      - RAILS_ENV=production
+      - FORCE_SSL=false
+      - INVITATION_CODE=${HUGINN_INVITATION_CODE:-try-huginn}
+      - APP_SECRET_TOKEN=${HUGINN_APP_SECRET_TOKEN:-$(openssl rand -hex 64)}
+      - SMTP_DOMAIN=${DOMAIN}
+      - SMTP_USER_NAME=${SMTP_USER_NAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_SERVER=${SMTP_SERVER:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_AUTHENTICATION=${SMTP_AUTHENTICATION:-plain}
+      - SMTP_ENABLE_STARTTLS_AUTO=true
+      - DATABASE_ADAPTER=postgresql
+      - DATABASE_HOST=neon-postgres
+      - DATABASE_PORT=5432
+      - DATABASE_ENCODING=utf8
+      - DATABASE_NAME=huginn
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASE_POOL=20
+      - DATABASE_RECONNECT=true
+      - SEED_USERNAME=${HUGINN_ADMIN_USERNAME:-admin}
+      - SEED_PASSWORD=${HUGINN_ADMIN_PASSWORD:-password}
+      - ENABLE_INSECURE_AGENTS=${ENABLE_INSECURE_AGENTS:-false}
+      - TIMEZONE=${TZ:-UTC}
+    volumes:
+      - huginn_data:/app/log
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/users/sign_in || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: ${HUGINN_MEMORY_LIMIT:-2G}
+          cpus: '2'
+        reservations:
+          memory: '512M'
+          cpus: '0.5'
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.huginn.rule=Host(`huginn.${DOMAIN}`)"
+      - "traefik.http.routers.huginn.entrypoints=websecure"
+      - "traefik.http.routers.huginn.tls.certresolver=letsencrypt"
+      - "traefik.http.services.huginn.loadbalancer.server.port=3000"
+      - "traefik.http.routers.huginn.service=huginn"
+      - "traefik.http.routers.huginn.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.huginn-local.rule=HostRegexp(`{host:(huginn.localhost|huginn.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.huginn-local.entrypoints=web"
+      - "traefik.http.services.huginn-local.loadbalancer.server.port=3000"
+      - "traefik.http.routers.huginn-local.middlewares=local-only@file,security@file"
+
+  # Add Element for Matrix client
+  element:
+    image: vectorim/element-web:latest
+    container_name: element-${DOMAIN_BASE}
+    restart: unless-stopped
+    volumes:
+      - element_config:/app/config.json
+    environment:
+      - DOMAIN=${DOMAIN}
+      - LOCAL_DOMAIN=${LOCAL_DOMAIN:-localhost}
+    command: >
+      sh -c "cp /element_config/config.json /app/config.json &&
+             chmod 644 /app/config.json &&
+             sed -i \"s/\\\$${DOMAIN}/${DOMAIN}/g\" /app/config.json && 
+             sed -i \"s/matrix\.localhost/matrix.${LOCAL_DOMAIN:-localhost}/g\" /app/config.json && 
+             nginx -g 'daemon off;'"
+    ports:
+      - "8099:80"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.element.rule=Host(`chat-matrix.${DOMAIN}`)"
+      - "traefik.http.routers.element.entrypoints=websecure"
+      - "traefik.http.routers.element.tls.certresolver=letsencrypt"
+      - "traefik.http.services.element.loadbalancer.server.port=80"
+      - "traefik.http.routers.element.middlewares=security@file"
+      # Local/LAN access - improved patterns for various local networks
+      - "traefik.http.routers.element-local.rule=HostRegexp(`{host:(chat-matrix.localhost|chat-matrix.lan|chat-matrix.local|matrix.localhost|matrix.lan|chat-matrix.192\\.168\\..*|chat-matrix.10\\..*|chat-matrix.172\\..*|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
+      - "traefik.http.routers.element-local.entrypoints=web"
+      - "traefik.http.services.element-local.loadbalancer.server.port=80"
+      - "traefik.http.routers.element-local.middlewares=local-only@file,security@file"
+
+  # Add WhoDB for PostgreSQL database exploration
+  whodb:
+    image: clidey/whodb:latest
+    container_name: whodb-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      - WHODB_OLLAMA_HOST=${OLLAMA_HOST:-192.168.1.200}
+      - WHODB_OLLAMA_PORT=${OLLAMA_PORT:-11434}
+      - WHODB_PG_HOST=neon-postgres
+      - WHODB_PG_PORT=5432
+      - WHODB_PG_USER=postgres
+      - WHODB_PG_PASSWORD=${POSTGRES_PASSWORD}
+      - WHODB_PG_DATABASE=whodb
+    volumes:
+      - whodb_data:/data
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access
+      - "traefik.http.routers.whodb.rule=Host(`db-explorer.${DOMAIN}`)"
+      - "traefik.http.routers.whodb.entrypoints=websecure"
+      - "traefik.http.routers.whodb.tls.certresolver=letsencrypt"
+      - "traefik.http.services.whodb.loadbalancer.server.port=8080"
+      - "traefik.http.routers.whodb.service=whodb"
+      - "traefik.http.routers.whodb.middlewares=security@file"
+      # Local/LAN access
+      - "traefik.http.routers.whodb-local.rule=HostRegexp(`{host:(db-explorer.localhost|db-explorer.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.whodb-local.entrypoints=web"
+      - "traefik.http.services.whodb-local.loadbalancer.server.port=8080"
+      - "traefik.http.routers.whodb-local.middlewares=local-only@file,security@file"
+
+# Volume configuration
+volumes:
+  ollama_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/ollama
+      o: bind
+  webui_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/webui
+      o: bind
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/postgres
+      o: bind
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/redis
+      o: bind
+  vector_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/vector
+      o: bind
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/prometheus
+      o: bind
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/grafana
+      o: bind
+  loki_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/loki
+      o: bind
+  authelia_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/authelia
+      o: bind
+  n8n_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/n8n
+      o: bind
+  uptime_kuma_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/uptime-kuma
+      o: bind
+  vaultwarden_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/vaultwarden
+      o: bind
+  matrix_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/matrix
+      o: bind
+  rustdesk_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/rustdesk
+      o: bind
+  syncthing_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/syncthing
+      o: bind
+  postiz_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/postiz
+      o: bind
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/minio
+      o: bind
+  spacedrive_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/spacedrive
+      o: bind
+  coolify_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/coolify
+      o: bind
+  homeassistant_config:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/homeassistant
+      o: bind
+  huginn_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/huginn
+      o: bind
+  whodb_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/whodb
+      o: bind
+  element_config:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/element
+      o: bind

@@ -1,0 +1,28 @@
+---
+# handlers file for roles/coolify
+
+# Docker handlers
+- name: restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+  become: true
+
+# Docker-compose handlers
+- name: restart coolify
+  community.docker.docker_compose_v2:
+    project_src: "{{ coolify_install_dir }}"
+    state: present
+    restarted: yes
+  become: true
+
+- name: reload docker
+  ansible.builtin.systemd:
+    name: docker
+    state: reloaded
+  become: true
+
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  become: true

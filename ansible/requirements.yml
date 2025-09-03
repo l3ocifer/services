@@ -1,0 +1,60 @@
+---
+collections:
+  - name: community.general
+    version: ">=7.0.0"
+  - name: community.docker
+    version: ">=3.6.0"
+  - name: ansible.posix
+    version: ">=1.5.4"
+  - name: amazon.aws
+    version: ">=6.0.0"
+  - name: community.aws
+    version: ">=6.0.0"
+  - name: amazon.route53
+    version: ">=1.0.0"
+
+roles:
+  # Core Infrastructure
+  - src: geerlingguy.security
+    version: ">=2.0.0"
+    name: security
+  
+  - src: weareinteractive.ufw
+    version: ">=1.10.0"
+    name: ufw
+  
+  # Monitoring & Metrics
+  - src: cloudalchemy.prometheus
+    version: ">=2.16.0"
+    name: prometheus
+    
+  - src: cloudalchemy.grafana
+    version: ">=0.16.2"
+    name: grafana
+    
+  - src: cloudalchemy.node_exporter
+    version: ">=2.0.0"
+    name: node_exporter
+    
+  - src: cloudalchemy.loki
+    version: ">=0.5.0"
+    name: loki
+  
+  # Storage & Sync
+  - src: arillso.restic
+    version: ">=2.0.0"
+    name: restic
+  
+  # Security & Identity
+  - src: geerlingguy.fail2ban
+    version: ">=3.1.0"
+    name: fail2ban
+  
+  # System Management
+  - src: geerlingguy.docker
+    version: ">=6.1.0"
+    name: docker
+  
+  - src: geerlingguy.pip
+    version: ">=2.2.0"
+    name: pip

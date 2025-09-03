@@ -1,0 +1,16 @@
+[Unit]
+Description=Kodi Media Center
+After=network.target
+
+[Service]
+Type=simple
+User={{ service_user }}
+Group={{ service_group }}
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/{{ service_user }}/.Xauthority
+ExecStart=/usr/bin/kodi-standalone
+Restart=on-abort
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

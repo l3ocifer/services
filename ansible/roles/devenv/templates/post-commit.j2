@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# Get the current branch name
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Only sync if we're on the main branch
+if [ "$BRANCH" = "main" ]; then
+    # Push changes to remote
+    git push origin main
+
+    # Get the list of changed files
+    CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+
+    # Update symlinks for changed files
+    for file in $CHANGED_FILES; do
+        # Get the full path of the file in the config repo
+        CONFIG_PATH="$HOME/.config/personal/$file"
+        
+        # Get the target path in the home directory
+        TARGET_PATH="$HOME/$file"
+        
+        # If the file exists in config and has a corresponding symlink
+        if [ -f "$CONFIG_PATH" ] && [ -L "$TARGET_PATH" ]; then
+            # Force update the symlink
+            ln -sf "$CONFIG_PATH" "$TARGET_PATH"
+            echo "Updated symlink for $file"
+        fi
+    done
+
+    # Special handling for secrets directory
+    if [ -d "$HOME/.secrets" ]; then
+        # Get Syncthing status
+        SYNCTHING_RUNNING=$(pgrep syncthing > /dev/null && echo "yes" || echo "no")
+        
+        if [ "$SYNCTHING_RUNNING" = "yes" ]; then
+            # Wait for Syncthing to sync changes
+            echo "Waiting for Syncthing to sync changes..."
+            sleep 10  # Give Syncthing some time to detect and start syncing
+            
+            # Optional: Add monitoring of Syncthing sync status here
+            # You could use the Syncthing REST API to check sync status
+            
+            echo "Syncthing sync initiated"
+        else
+            echo "Warning: Syncthing is not running. Secret files may not be synced."
+        fi
+    fi
+fi

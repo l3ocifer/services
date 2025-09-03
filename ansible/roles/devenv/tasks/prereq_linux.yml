@@ -1,0 +1,20 @@
+---
+# Update package cache
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  become: true
+
+# Install essential packages
+- name: Install essential packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  become: true
+  with_items:
+    - git
+    - curl
+    - wget
+    - python3
+    - python3-pip
+    - software-properties-common

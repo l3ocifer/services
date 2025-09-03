@@ -1,0 +1,137 @@
+---
+- name: Verify AWS credentials
+  ansible.builtin.command: aws sts get-caller-identity
+  environment:
+    AWS_PROFILE: "{{ lookup('env', 'AWS_PROFILE') | default(lookup('env', 'AWS_DEFAULT_PROFILE'), true) }}"
+    AWS_REGION: "{{ lookup('env', 'AWS_REGION') | default(lookup('env', 'AWS_DEFAULT_REGION'), true) }}"
+    AWS_SESSION_TOKEN: "{{ lookup('env', 'AWS_SESSION_TOKEN') | default('', true) }}"
+  register: aws_creds_check
+  changed_when: false
+  failed_when: aws_creds_check.rc != 0
+
+- name: Verify target environment requirements
+  ansible.builtin.assert:
+    that:
+      - instance_type_map[target_env] is defined
+      - instance_type_map[target_env].ram_gb is defined
+      - instance_type_map[target_env].vcpus is defined
+    msg: "Invalid target environment: {{ target_env }}"
+
+- name: Set SSH key name
+  ansible.builtin.set_fact:
+    ssh_key_name: "{{ ssh_key_name | default('leo-personal') }}"
+
+- name: Set SSH key paths
+  ansible.builtin.set_fact:
+    ssh_key_path: "~/.ssh/{{ ssh_key_name }}"
+    ssh_public_key_path: "~/.ssh/{{ ssh_key_name }}.pub"
+
+- name: Verify SSH key exists
+  ansible.builtin.stat:
+    path: "{{ ssh_key_path }}"
+  register: ssh_key
+  failed_when: not ssh_key.stat.exists
+
+- name: Verify SSH public key exists
+  ansible.builtin.stat:
+    path: "{{ ssh_public_key_path }}"
+  register: ssh_pub_key
+  failed_when: not ssh_pub_key.stat.exists
+
+- name: Import SSH key to AWS if not exists
+  amazon.aws.ec2_key:
+    name: "{{ ssh_key_name }}"
+    key_material: "{{ lookup('file', ssh_public_key_path) }}"
+    region: "{{ aws_region }}"
+  register: aws_key
+  when: ssh_pub_key.stat.exists 
+
+- name: Verify SSH configuration
+  block:
+    - name: Check SSH key permissions
+      file:
+        path: "{{ item }}"
+        mode: "0600"
+      loop:
+        - "{{ ssh_key_path }}"
+        - "{{ ssh_public_key_path }}"
+      when: item is exists
+
+    - name: Verify SSH key format
+      command: "ssh-keygen -l -f {{ ssh_key_path }}"
+      changed_when: false
+      register: key_check
+      failed_when: key_check.rc != 0
+
+    - name: Check if key is already in AWS
+      amazon.aws.ec2_key:
+        name: "{{ ssh_key_name }}"
+        region: "{{ aws_region }}"
+      register: existing_key 
+
+- name: Verify SSM access
+  amazon.aws.iam_role_info:
+    name: "SSMInstanceProfile"
+  register: ssm_role
+  failed_when: false
+
+- name: Get SSM role policies
+  amazon.aws.iam_policy:
+    iam_type: role
+    iam_name: "SSMInstanceProfile"
+    state: present
+    policy_name: "AmazonSSMManagedInstanceCore"
+  register: ssm_role_policies
+  when: ssm_role.iam_roles | length > 0
+  failed_when: false
+
+- name: Create SSM role if missing
+  amazon.aws.iam_role:
+    name: "SSMInstanceProfile"
+    state: present
+    assume_role_policy_document: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      }
+    managed_policies:
+      - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  register: ssm_role_create
+  when: ssm_role.iam_roles | length == 0
+
+- name: Create SSM instance profile
+  amazon.aws.iam_instance_profile:
+    name: "SSMInstanceProfile"
+    state: present
+    role: "SSMInstanceProfile"
+  register: ssm_profile
+  when: ssm_role_create is changed or ssm_role.iam_roles | length == 0
+
+- name: Update SSM role policies if needed
+  amazon.aws.iam_role:
+    name: "SSMInstanceProfile"
+    state: present
+    assume_role_policy_document: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      }
+    managed_policies:
+      - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  when: ssm_role.iam_roles | length > 0 and not ssm_role_policies.changed 

@@ -1,0 +1,156 @@
+---
+# Main playbook for homelab configuration
+
+- name: Configure base system for all nodes
+  hosts: all
+  become: true
+  tags: ["base"]
+  roles:
+    - role: security
+    - role: ufw
+    - role: fail2ban
+    - role: node_exporter
+      when: node_exporter_enabled | default(true)
+    - role: wireguard
+      when: wireguard_enabled | default(true)
+    - role: cockpit
+      when: cockpit_enabled | default(true)
+
+- name: Configure desktop node (High RAM)
+  hosts: desktop_nodes
+  become: true
+  tags: ["desktop"]
+  roles:
+    # AI Services (High RAM)
+    - role: ollama  # AI model serving
+      vars:
+        ollama_ram_limit: "40G"
+    - role: librechat  # AI chat interface
+    - role: openwebui  # AI UI
+    
+    # Media Services
+    - role: jellyfin
+      vars:
+        media_path: "/data/media"
+    - role: kodi
+    
+    # Monitoring & Management
+    - role: prometheus
+      when: not prometheus_disabled | default(false)
+    - role: grafana
+      when: not grafana_disabled | default(false)
+    - role: loki  # Log aggregation
+    - role: whodb  # Database management
+    - role: coolify  # Container management
+      when: coolify_enabled | default(true)
+    - role: uptime-kuma
+    - role: umami  # Analytics
+
+- name: Configure Raspberry Pi cluster leaders
+  hosts: raspi_leaders
+  become: true
+  tags: ["raspi", "leaders"]
+  roles:
+    # Core Infrastructure
+    - role: traefik  # Load balancer
+      when: traefik_enabled | default(true)
+    - role: hickory_dns  # DNS server
+      vars:
+        upstream_dns: "{{ pihole_ip }}"
+    - role: pihole
+      when: "inventory_hostname in groups['dns_primary']"
+    
+    # Security & Authentication
+    - role: vaultwarden  # Password management
+    - role: authelia  # Authentication
+      when: "inventory_hostname in groups['auth_primary']"
+    - role: logto
+      when: "inventory_hostname in groups['auth_secondary']"
+    
+    # Home Automation
+    - role: home_assistant
+      when: "inventory_hostname in groups['home_automation']"
+    - role: homekit_bridge
+      when: "inventory_hostname in groups['home_automation']"
+    - role: diyhue
+      when: "inventory_hostname in groups['home_automation']"
+
+- name: Configure Raspberry Pi workers
+  hosts: raspi_workers
+  become: true
+  tags: ["raspi", "workers"]
+  roles:
+    # Communication & Collaboration
+    - role: matrix  # Chat server
+      when: "inventory_hostname in groups['chat_nodes']"
+    - role: rocket_chat
+      when: "inventory_hostname in groups['chat_nodes']"
+    - role: jitsi  # Video conferencing
+      when: "inventory_hostname in groups['video_nodes']"
+    
+    # Remote Access
+    - role: rustdesk  # Remote desktop
+    - role: rustpad  # Collaborative editor
+    - role: guacamole  # Remote access gateway
+      when: "inventory_hostname in groups['remote_access']"
+    
+    # Automation & Integration
+    - role: huginn  # Automation
+      when: "inventory_hostname in groups['automation_nodes']"
+    - role: n8n  # Workflow automation
+      when: "inventory_hostname in groups['automation_nodes']"
+    - role: postiz  # API gateway
+      when: "inventory_hostname in groups['api_nodes']"
+    
+    # File Sync & Gaming
+    - role: syncthing  # File sync
+      when: "inventory_hostname in groups['storage_nodes']"
+    - role: retro_pi  # Retro gaming
+      when: "inventory_hostname in groups['gaming_nodes']"
+    
+- name: Configure AWS Route53 integration
+  hosts: dns_managers
+  become: true
+  tags: ["dns"]
+  roles:
+    - role: route53_manager
+      vars:
+        route53_domains:
+          - zone_id: "{{ aws_zone_id }}"
+            domain: "{{ domain_name }}"
+            records:
+              - name: "traefik"
+                type: A
+                ttl: 300
+                value: "{{ traefik_ip }}"
+              - name: "coolify"
+                type: A
+                ttl: 300
+                value: "{{ coolify_ip }}"
+              - name: "ai"
+                type: A
+                ttl: 300
+                value: "{{ desktop_ip }}"
+              - name: "media"
+                type: A
+                ttl: 300
+                value: "{{ desktop_ip }}"
+              - name: "home"
+                type: A
+                ttl: 300
+                value: "{{ home_assistant_ip }}"
+
+- name: Verify all services
+  hosts: all
+  become: true
+  tags: ["verify"]
+  tasks:
+    - name: Check service status
+      service_facts:
+      register: service_status
+    
+    - name: Verify container health
+      command: docker container ls --format '{{.Names}} {{.Status}}'
+      register: container_status
+      changed_when: false
+      when: "'docker' in service_status.ansible_facts.services"

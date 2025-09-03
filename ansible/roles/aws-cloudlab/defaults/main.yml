@@ -1,0 +1,210 @@
+---
+# AWS Test Runner Configuration
+
+# AWS Configuration
+aws_region: "us-east-1"
+aws_profile: "default"
+aws_vpc_cidr: "10.0.0.0/16"
+aws_subnet_cidr: "10.0.1.0/24"
+
+# Instance Configuration
+instance_count: 1  # Number of instances to maintain
+instance_type_map:
+  "legion":  # RPi environment
+    type: "t3.micro"
+    ram_gb: 1
+    vcpus: 1
+  "alef":  # Desktop environment
+    type: "t3.2xlarge"
+    ram_gb: 32
+    vcpus: 8
+
+# Test Configuration
+test_timeout_minutes: 5  # Reduced timeout for faster feedback
+instance_check_delay: 10  # Seconds between instance checks
+instance_check_retries: 12  # Number of retries for instance checks
+cleanup_on_success: true
+cleanup_on_failure: false  # Keep instance for debugging
+parallel_tests: 1  # Number of simultaneous test instances
+
+# Verification
+verification_retries: 3
+verification_delay: 30  # seconds between retries
+
+# Target Environment
+target_env: "{{ 'legion' if ansible_memtotal_mb <= 1024 else 'alef' }}"
+
+# SSH Configuration
+ssh_config:
+  user: "l3o"
+  key_name: "leo-personal"
+  key_path: "{{ lookup('env', 'HOME') }}/.ssh/leo-personal"
+  public_key_path: "{{ lookup('env', 'HOME') }}/.ssh/leo-personal.pub"
+  options:
+    ServerAliveInterval: 60
+    ServerAliveCountMax: 30
+    StrictHostKeyChecking: "ask"
+    VerifyHostKeyDNS: "yes"
+    ForwardAgent: "no"
+    AddKeysToAgent: "yes"
+
+# Additional Security
+security_group_rules:
+  - proto: tcp
+    ports: 22
+    cidr_ip: "{{ ansible_default_ipv4.address }}/32"
+  - proto: tcp
+    ports: 80
+    cidr_ip: "0.0.0.0/0"
+  - proto: tcp
+    ports: 443
+    cidr_ip: "0.0.0.0/0"
+
+# Environment Configuration
+deployment_mode: >-
+  {%- if deployment_type | default('test') == 'prod' -%}
+    prod
+  {%- elif deployment_type | default('test') == 'dev' -%}
+    dev
+  {%- else -%}
+    test
+  {%- endif -%}
+cleanup_enabled: >-
+  {%- if deployment_type | default('test') == 'test' -%}
+    true
+  {%- elif cleanup_requested | default(false) -%}
+    true
+  {%- else -%}
+    false
+  {%- endif -%}
+environment_prefix: "l3o-{{ deployment_mode }}"
+
+# VPC Configuration
+vpc_config:
+  name: "{{ environment_prefix }}-vpc"
+  cidr: "10.0.0.0/16"
+  enable_dns_hostnames: true
+  enable_dns_support: true
+  tags:
+    Name: "{{ environment_prefix }}-vpc"
+    Environment: "{{ deployment_mode }}"
+    AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+
+# Enhanced Subnet Configuration
+subnet_config:
+  public_1:
+    name: "{{ environment_prefix }}-public-1"
+    cidr: "10.0.1.0/24"
+    az: "{{ aws_region }}a"
+    map_public_ip: true
+    tags:
+      Environment: "{{ deployment_mode }}"
+      AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+  public_2:
+    name: "{{ environment_prefix }}-public-2"
+    cidr: "10.0.2.0/24"
+    az: "{{ aws_region }}b"
+    map_public_ip: true
+    tags:
+      AutoRemove: "yes"
+  private_1:
+    name: "{{ environment_prefix }}-private-1"
+    cidr: "10.0.3.0/24"
+    az: "{{ aws_region }}a"
+    map_public_ip: false
+    tags:
+      AutoRemove: "yes"
+  private_2:
+    name: "{{ environment_prefix }}-private-2"
+    cidr: "10.0.4.0/24"
+    az: "{{ aws_region }}b"
+    map_public_ip: false
+    tags:
+      AutoRemove: "yes"
+
+# Static IP Assignments (matching homelab)
+static_ip_map:
+  alef:
+    private_ip: "10.0.1.10"
+  legion:
+    private_ip: "10.0.1.11"
+
+# NAT Gateway Configuration
+nat_gateway_config:
+  enabled: true
+  name: "{{ environment_prefix }}-nat"
+  subnet: "public_1"
+  tags:
+    Name: "{{ environment_prefix }}-nat"
+    Environment: "{{ deployment_mode }}"
+    AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+  routes:
+    - dest: "0.0.0.0/0"
+      description: "Internet access via NAT Gateway"
+
+# Security Configuration
+security_groups:
+  test_instances:
+    name: "{{ environment_prefix }}-sg"
+    description: "Security group for {{ deployment_mode }} instances"
+    rules:
+      ingress:
+        - proto: tcp
+          ports: [22]
+          cidr_ip: "{{ vpc_config.cidr }}"
+        - proto: all
+          from_port: -1
+          to_port: -1
+          cidr_ip: "{{ vpc_config.cidr }}"
+      egress:
+        - proto: -1
+          from_port: -1
+          to_port: -1
+          cidr_ip: "0.0.0.0/0"
+
+# Add load balancer configuration
+load_balancer_config:
+  enabled: "{{ deployment_type | default('test') == 'prod' }}"
+  name: "{{ environment_prefix }}-lb"
+  type: "application"
+  scheme: "internet-facing"
+  tags:
+    Environment: "{{ deployment_mode }}"
+    AutoRemove: "{{ deployment_type | default('test') != 'prod' | string }}"
+  subnets: "{{ public_subnets.results | map(attribute='subnet.id') | list if deployment_type == 'prod' else [] }}"
+  security_group_rules:
+    - proto: tcp
+      from_port: 80
+      to_port: 80
+      cidr_ip: "0.0.0.0/0"
+    - proto: tcp
+      from_port: 443
+      to_port: 443
+      cidr_ip: "0.0.0.0/0"
+  listeners: []  # Will be populated in prod mode only
+
+# Add AMI mapping
+ami_map:
+  alef: "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS amd64
+  legion: "ami-0c7217cdde317cfec"  # Ubuntu 22.04 LTS arm64
+
+# VPC Endpoint Configuration
+vpc_endpoints:
+  ssm:
+    name: "{{ environment_prefix }}-ssm"
+    service: "ssm"
+    vpc_endpoint_type: "Interface"
+    subnet_ids: "{{ private_subnets.results | map(attribute='subnet.id') | list }}"
+    security_group_ids: ["{{ test_sg.group_id }}"]
+  ssmmessages:
+    name: "{{ environment_prefix }}-ssmmessages"
+    service: "ssmmessages"
+    vpc_endpoint_type: "Interface"
+    subnet_ids: "{{ private_subnets.results | map(attribute='subnet.id') | list }}"
+    security_group_ids: ["{{ test_sg.group_id }}"]
+  ec2messages:
+    name: "{{ environment_prefix }}-ec2messages"
+    service: "ec2messages"
+    vpc_endpoint_type: "Interface"
+    subnet_ids: "{{ private_subnets.results | map(attribute='subnet.id') | list }}"
+    security_group_ids: ["{{ test_sg.group_id }}"]

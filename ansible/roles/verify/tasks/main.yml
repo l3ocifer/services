@@ -1,0 +1,63 @@
+---
+# Verification tasks for homelab setup
+
+- name: Verify node resources
+  ansible.builtin.setup:
+    gather_subset:
+      - hardware
+  register: node_facts
+
+- name: Verify memory requirements
+  ansible.builtin.assert:
+    that:
+      - "ansible_memtotal_mb >= node_min_memory_mb | default(900)"
+    msg: "Node does not meet minimum memory requirements"
+
+- name: Verify disk space
+  ansible.builtin.command: df -h {{ item }}
+  register: disk_space
+  changed_when: false
+  loop:
+    - "{{ service_data_dir | default('/var/lib/docker') }}"
+    - "{{ service_log_dir | default('/var/log') }}"
+
+- name: Verify network connectivity
+  ansible.builtin.wait_for:
+    host: "{{ item }}"
+    port: 22
+    timeout: 5
+  loop: "{{ groups['all'] | difference([inventory_hostname]) }}"
+  ignore_errors: yes
+  register: network_check
+
+- name: Verify AWS credentials
+  ansible.builtin.command: aws sts get-caller-identity
+  environment:
+    AWS_PROFILE: "{{ aws_profile | default('default') }}"
+  register: aws_check
+  changed_when: false
+  ignore_errors: yes
+  when: route53_enabled | default(false)
+
+- name: Verify Coolify access
+  ansible.builtin.uri:
+    url: "{{ coolify_url }}/api/v1/status"
+    headers:
+      Authorization: "Bearer {{ coolify_api_key }}"
+    validate_certs: yes
+  register: coolify_check
+  ignore_errors: yes
+  when: coolify_enabled | default(false)
+
+- name: Generate verification report
+  ansible.builtin.template:
+    src: verification_report.j2
+    dest: "/var/log/homelab/verification_{{ inventory_hostname }}.log"
+    mode: '0644'
+  vars:
+    report_data:
+      memory: "{{ node_facts.ansible_facts.ansible_memtotal_mb }}"
+      disk: "{{ disk_space.results }}"
+      network: "{{ network_check }}"
+      aws: "{{ aws_check if route53_enabled | default(false) else omit }}"
+      coolify: "{{ coolify_check if coolify_enabled | default(false) else omit }}"

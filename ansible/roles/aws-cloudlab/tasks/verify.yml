@@ -1,0 +1,77 @@
+---
+- name: Verify VPC configuration
+  assert:
+    that:
+      - test_vpc is defined
+      - test_vpc.vpc.id is defined
+      - test_vpc.vpc.cidr_block == vpc_config.cidr
+
+- name: Verify subnet configuration
+  assert:
+    that:
+      - public_subnets.results | length == 2
+      - private_subnets.results | length == 2
+      - nat_gateway is defined
+      - private_route_table is defined
+      - public_route_table is defined
+
+- name: Verify instance connectivity
+  command: >
+    aws ssm start-session 
+    --target {{ test_instance.instances[0].instance_id }}
+    --document-name AWS-StartInteractiveCommand 
+    --parameters command="curl -s https://checkip.amazonaws.com && ping -c 1 8.8.8.8"
+  register: connectivity_check
+  retries: 5
+  delay: 15
+  until: connectivity_check.rc == 0
+
+- name: Verify load balancer (prod only)
+  assert:
+    that:
+      - load_balancer is defined
+      - target_group is defined
+      - lb_sg is defined
+  when: not test_mode | default(true)
+
+- name: Verify instance state
+  assert:
+    that:
+      - test_instance is defined
+      - test_instance.instances[0].state.name == "running"
+      - test_instance.instances[0].private_ip_address is defined
+    msg: "Instance failed to launch properly"
+
+- name: Verify route tables
+  assert:
+    that:
+      - private_route_table.route_table.routes | selectattr('nat_gateway_id', 'defined') | list | length > 0
+      - public_route_table.route_table.routes | selectattr('gateway_id', 'defined') | list | length > 0
+    msg: "Route tables not configured correctly"
+
+- name: Verify security group configuration
+  assert:
+    that:
+      - test_sg is defined
+      - test_sg.group_id is defined
+      - test_sg.rules | length > 0
+    msg: "Security group configuration is incomplete"
+
+- name: Verify VPC endpoint configuration
+  assert:
+    that:
+      - vpc_endpoints_result is defined
+      - vpc_endpoints_result.results | length == 3
+      - vpc_endpoints_result.results | map(attribute='vpc_endpoint.state') | unique == ['available']
+    msg: "VPC endpoints are not properly configured"
+
+- name: Output verification status
+  debug:
+    msg: |
+      Infrastructure Verification Results:
+      - VPC: {{ test_vpc.vpc.id }}
+      - Public Subnets: {{ public_subnets.results | map(attribute='subnet.id') | list }}
+      - Private Subnets: {{ private_subnets.results | map(attribute='subnet.id') | list }}
+      - NAT Gateway: {{ nat_gateway.nat_gateway_id }}
+      - Instance ID: {{ test_instance.instances[0].instance_id }}
+      - Load Balancer: {{ load_balancer.dns_name if not test_mode | default(true) else 'Not Created (Test Mode)' }} 

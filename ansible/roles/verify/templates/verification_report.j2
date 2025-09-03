@@ -1,0 +1,47 @@
+Homelab Node Verification Report
+================================
+Node: {{ inventory_hostname }}
+Time: {{ ansible_date_time.iso8601 }}
+
+System Resources
+---------------
+Memory Total: {{ report_data.memory }}MB
+{% for disk in report_data.disk %}
+Disk Space ({{ disk.item }}):
+{{ disk.stdout }}
+{% endfor %}
+
+Network Connectivity
+------------------
+{% for host in report_data.network.results %}
+{{ host.item }}: {{ 'OK' if host.failed is not defined else 'FAILED' }}
+{% endfor %}
+
+{% if route53_enabled | default(false) %}
+AWS Integration
+--------------
+Status: {{ 'OK' if not report_data.aws.failed else 'FAILED' }}
+{% if not report_data.aws.failed %}
+Identity: {{ report_data.aws.stdout | from_json | to_nice_json }}
+{% endif %}
+{% endif %}
+
+{% if coolify_enabled | default(false) %}
+Coolify Integration
+-----------------
+Status: {{ 'OK' if not report_data.coolify.failed else 'FAILED' }}
+{% if not report_data.coolify.failed %}
+API Status: {{ report_data.coolify.json | to_nice_json }}
+{% endif %}
+{% endif %}
+
+Recommendations
+-------------
+{% if report_data.memory < 1024 %}
+- Low memory node: Consider only running lightweight services
+{% endif %}
+{% for disk in report_data.disk %}
+{% if disk.stdout | regex_search('([0-9]+)%').0 | int > 80 %}
+- High disk usage on {{ disk.item }}: Consider cleanup or expansion
+{% endif %}
+{% endfor %}

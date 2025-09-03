@@ -1,0 +1,49 @@
+---
+# Playbook to setup Coolify on Ubuntu desktop
+- name: Deploy Coolify to Ubuntu desktop
+  hosts: localhost
+  connection: local
+  become: true
+  vars:
+    coolify_install_dir: "/opt/coolify"
+    coolify_ui_port: 3000
+    coolify_api_port: 8000
+    coolify_domain: "coolify.{{ ansible_hostname }}.internal"
+  
+  pre_tasks:
+    - name: Ensure system is up-to-date
+      apt:
+        update_cache: yes
+        upgrade: dist
+      when: ansible_os_family == "Debian"
+    
+    - name: Install required dependencies
+      apt:
+        name:
+          - curl
+          - wget
+          - gnupg
+          - apt-transport-https
+          - ca-certificates
+          - lsb-release
+          - software-properties-common
+        state: present
+      when: ansible_os_family == "Debian"
+  
+  roles:
+    - { role: ../roles/coolify }
+
+  post_tasks:
+    - name: Display Coolify access URL
+      debug:
+        msg: "Coolify is now available at http://{{ ansible_host }}:{{ coolify_ui_port }}"
+      
+    - name: Wait for Coolify to be fully initialized
+      uri:
+        url: "http://localhost:{{ coolify_ui_port }}/api/v1/status"
+        status_code: 200
+      register: coolify_response
+      retries: 6
+      delay: 10
+      until: coolify_response.status == 200
+      ignore_errors: yes

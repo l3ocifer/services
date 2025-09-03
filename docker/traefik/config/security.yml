@@ -1,0 +1,45 @@
+http:
+  middlewares:
+    security:
+      headers:
+        frameDeny: true
+        sslRedirect: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
+        customResponseHeaders:
+          X-Robots-Tag: "none,noarchive,nosnippet,notranslate,noimageindex"
+          server: ""
+          X-Content-Type-Options: "nosniff"
+          X-Frame-Options: "SAMEORIGIN"
+          X-XSS-Protection: "1; mode=block"
+
+    traefik-auth:
+      basicAuth:
+        users:
+          - "admin-codeofconsciousness:$$apr1$$YPwrnlVM$$w9eKVEBoLqdixVwFYzZzh1"
+        removeHeader: true
+
+    rustpad-auth:
+      basicAuth:
+        users:
+          - "admin-codeofconsciousness:$$apr1$$8tZvSTfN$$6sm0foSfqranEmCXjPiYc1"
+        removeHeader: true
+
+    webui-auth:
+      basicAuth:
+        users:
+          - "admin-codeofconsciousness:$$apr1$$bRtp8Cqq$$WrIO6E8DaVJmgz2a9r7TZ1"
+        removeHeader: true
+
+    local-only:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"  # localhost
+          - "10.0.0.0/8"    # private network
+          - "172.16.0.0/12" # private network (includes Docker)
+          - "192.168.0.0/16" # private network

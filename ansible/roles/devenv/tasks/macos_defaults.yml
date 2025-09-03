@@ -1,0 +1,76 @@
+---
+# macOS System Preferences
+- name: Configure macOS system preferences
+  osx_defaults:
+    domain: "{{ item.domain }}"
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+    state: present
+  loop:
+    # Dock settings
+    - { domain: "com.apple.dock", key: "autohide", type: "bool", value: false }
+    - { domain: "com.apple.dock", key: "minimize-to-application", type: "bool", value: true }
+    - { domain: "com.apple.dock", key: "show-recents", type: "bool", value: false }
+    
+    # Finder settings
+    - { domain: "com.apple.finder", key: "ShowPathbar", type: "bool", value: true }
+    - { domain: "com.apple.finder", key: "ShowStatusBar", type: "bool", value: true }
+    - { domain: "com.apple.finder", key: "FXPreferredViewStyle", type: "string", value: "Nlsv" }
+    - { domain: "com.apple.finder", key: "AppleShowAllFiles", type: "string", value: "YES" }
+    - { domain: "com.apple.finder", key: "ShowExternalHardDrivesOnDesktop", type: "bool", value: true }
+    - { domain: "com.apple.finder", key: "ShowHardDrivesOnDesktop", type: "bool", value: true }
+    - { domain: "com.apple.finder", key: "NewWindowTargetPath", type: "string", value: "file://${HOME}/Desktop/" }
+    
+    # System settings
+    - { domain: "NSGlobalDomain", key: "AppleShowAllExtensions", type: "bool", value: true }
+    - { domain: "NSGlobalDomain", key: "InitialKeyRepeat", type: "int", value: 15 }
+    - { domain: "NSGlobalDomain", key: "KeyRepeat", type: "int", value: 2 }
+    - { domain: "NSGlobalDomain", key: "NSNavPanelExpandedStateForSaveMode", type: "bool", value: true }
+    - { domain: "NSGlobalDomain", key: "PMPrintingExpandedStateForPrint", type: "bool", value: true }
+    - { domain: "NSGlobalDomain", key: "NSDocumentSaveNewDocumentsToCloud", type: "bool", value: false }
+    
+    # Security settings
+    - { domain: "com.apple.screensaver", key: "askForPassword", type: "int", value: 1 }
+    - { domain: "com.apple.screensaver", key: "askForPasswordDelay", type: "int", value: 0 }
+    
+    # Printing settings
+    - { domain: "com.apple.print.PrintingPrefs", key: "Quit When Finished", type: "bool", value: true }
+    
+    # System settings
+    - { domain: "com.apple.systempreferences", key: "TMShowUnsupportedNetworkVolumes", type: "bool", value: true }
+  when: ansible_os_family == "Darwin"
+  tags: ['macos']
+  register: macos_defaults_result
+
+# System Preferences that require sudo
+- name: Configure system preferences requiring sudo
+  osx_defaults:
+    domain: "{{ item.domain }}"
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+    state: present
+  become: true
+  loop:
+    # Power management
+    - { domain: "com.apple.PowerManagement", key: "lidwake", type: "int", value: 1 }
+    - { domain: "com.apple.PowerManagement", key: "acwake", type: "int", value: 0 }
+    - { domain: "com.apple.PowerManagement", key: "displaysleep", type: "int", value: 15 }
+    
+    # Security
+    - { domain: "/Library/Preferences/com.apple.security", key: "GKAutoRearm", type: "bool", value: false }
+  when: ansible_os_family == "Darwin"
+  tags: ['macos']
+
+# Restart affected services
+- name: Restart macOS services
+  command: killall -HUP {{ item }}
+  loop:
+    - Finder
+    - Dock
+    - SystemUIServer
+  when: macos_defaults_result is changed
+  ignore_errors: yes
+  when: ansible_os_family == "Darwin"
+  tags: ['macos']

@@ -1,0 +1,33 @@
+---
+# Default variables for Kodi configuration
+
+service_name: kodi
+service_user: "{{ service_name }}"
+service_group: "{{ service_name }}"
+
+# Directories
+service_home: "/home/{{ service_name }}"
+service_config_dir: "{{ service_home }}/.kodi"
+service_data_dir: "/var/lib/{{ service_name }}"
+service_log_dir: "/var/log/{{ service_name }}"
+
+# Service configuration
+service_display: ":0"
+
+# System service configuration
+service_restart: "on-abort"
+service_restart_sec: 5
+
+# Dependencies
+service_packages:
+  - kodi
+  - kodi-x11
+  - kodi-visualization-spectrum
+  - kodi-peripheral-joystick
+  - kodi-inputstream-adaptive
+  - kodi-inputstream-rtmp
+  - mesa-utils
+  - xorg
+  - xinit
+  - alsa-utils
+  - pulseaudio

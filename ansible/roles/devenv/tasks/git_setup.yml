@@ -1,0 +1,85 @@
+---
+# Directory setup
+- name: Create Git directories
+  file:
+    path: "{{ item | expanduser }}"
+    state: directory
+    mode: '0755'
+  with_items:
+    - "{{ git_base_dir }}"
+    - "{{ devenv_dir }}"
+    - "~/.config/git"
+    - "~/.config/git/includes"
+  tags: ['git']
+
+# Git configuration
+- name: Configure git globally
+  git_config:
+    name: "{{ item.name }}"
+    scope: global
+    value: "{{ item.value }}"
+  loop:
+    - { name: 'user.name', value: '{{ git_user_name }}' }
+    - { name: 'user.email', value: '{{ git_user_email }}' }
+    - { name: 'http.postBuffer', value: '524288000' }
+    - { name: 'credential.helper', value: '{{ "osxkeychain" if is_macos else "cache --timeout=604800" }}' }
+    - { name: 'core.autocrlf', value: 'input' }
+    - { name: 'core.longpaths', value: 'true' }
+    - { name: 'pull.rebase', value: 'true' }
+    - { name: 'init.defaultBranch', value: 'main' }
+  loop_control:
+    label: "{{ item.name }}"
+  tags: ['git']
+
+# SSH configuration
+- name: Configure Git SSH command
+  git_config:
+    name: core.sshCommand
+    scope: global
+    value: >-
+      ssh
+      {%- for key in ssh_keys | default([]) %}
+      -i {{ '~/.ssh/' ~ key.name | expanduser }}
+      {%- endfor %}
+  when: ssh_keys is defined and ssh_keys | length > 0
+  tags: ['git']
+
+# Repository setup
+- name: Clone devenv repository
+  git:
+    repo: "{{ devenv_repo }}"
+    dest: "{{ devenv_dir }}"
+    version: "{{ devenv_version | default('main') }}"
+  when: devenv_repo is defined
+  tags: ['git']
+
+- name: Clone personal repositories
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ git_base_dir }}/{{ item.name }}"
+    version: "{{ item.version | default('main') }}"
+  loop: "{{ git_repos | default([]) }}"
+  when: git_repos is defined
+  loop_control:
+    label: "{{ item.name }}"
+  tags: ['git']
+
+- name: Ensure git config directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "~/.config/git"
+    - "~/.config/git/includes"
+  tags: ['git']
+
+- name: Create git config files
+  ansible.builtin.template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest }}"
+    mode: '0644'
+  loop:
+    - { template: "gitconfig-personal.j2", dest: "~/.config/git/includes/gitconfig-personal" }
+    - { template: "gitconfig-provisions.j2", dest: "~/.config/git/includes/gitconfig-provisions" }
+  tags: ['git']

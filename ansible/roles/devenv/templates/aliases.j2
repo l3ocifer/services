@@ -1,0 +1,104 @@
+# Git aliases
+alias g="git"
+alias gs="git status"
+alias gc="git commit"
+alias gp="git push"
+alias gl="git pull"
+
+# AWS Profile Aliases
+alias leo='export AWS_PROFILE=aws-l3o-iam-leo && export AWS_REGION=us-east-1'
+alias dre='export AWS_PROFILE=aws-dre-iam-leo && export AWS_REGION=us-east-1'
+alias pie='export AWS_PROFILE=aws-pie-iam-leo && export AWS_REGION=us-east-1'
+alias uai='export AWS_PROFILE=aws-ursulai-iam-leo && export AWS_REGION=us-east-1'
+alias scy='export AWS_PROFILE=aws-scryar-iam-leo && export AWS_REGION=us-west-2'
+alias awr='export AWS_PROFILE=aws-awr-iam-leo && export AWS_REGION=us-east-1'
+alias abyss='export AWS_PROFILE=aws-abyss-iam-leothelion && export AWS_REGION=ap-southeast-1'
+alias stein='export AWS_PROFILE=aws-stein-iam-L3o && export AWS_REGION=us-east-1'
+alias barge='export AWS_PROFILE=aws-pg-barge-iam-Leo.Paska@provisionsgroup.com && export AWS_REGION=us-east-1'
+alias sms='export AWS_PROFILE=aws-pg-sms-Leo && export AWS_REGION=us-east-2'
+
+# Kubernetes Aliases
+alias aeuk="aws eks update-kubeconfig --name"
+alias kgpa="kubectl get pods -A"
+alias kgda="kubectl get deploy -A"
+alias kgsa="kubectl get secrets -A"
+alias kgsvc="kubectl get service -A"
+alias kg="kubectl get"
+alias kd="kubectl describe"
+alias kl="kubectl logs"
+alias kge='kubectl get events --sort-by=.metadata.creationTimestamp'
+alias wpexec='kubectl exec -it $(kubectl get pods -l app=wordpress -o jsonpath="{.items[0].metadata.name}") -- /bin/bash'
+
+# AWS Aliases
+alias acl="aws configure list"
+alias aelc="aws eks list-clusters"
+alias uaibastion='aws ssm start-session --target i-0c8837d362c7ced65 --region us-east-1'
+
+# Terraform Aliases
+alias ta='terraform apply'
+alias tp='terraform plan'
+alias ta-aa='terraform apply -auto-approve'
+alias td='terraform destroy'
+alias td-aa='terraform destroy -auto-approve'
+
+# Navigation aliases
+alias ..="cd .."
+alias ...="cd ../.."
+alias ls="eza"
+alias ll="eza -la"
+alias lt="eza -T"  # Tree view
+alias la="eza -a"  # Show hidden files
+
+# Development aliases
+alias tf="terraform"
+alias k="kubectl"
+alias d="docker"
+
+# Script Aliases
+alias stdf='~/git/l3ocifer/stable-diffusion-webui/webui.sh'
+alias domain='~/.scripts/google-domain-aws-route53.sh'
+alias newrepo='~/.scripts/create-repo.sh'
+alias fork='~/.scripts/fork-repo.sh'
+alias aoe='~/.scripts/editzshrc.sh'
+alias play='~/.scripts/autogptpluginsetup.sh'
+alias plug='cd ~/git/l3ocifer/Auto-GPT/plugins/ && git clone'
+alias gpt='cd ~/git/l3ocifer/Auto-GPT/ && ./run.sh --gpt4only --skip-news'
+alias pubkey='~/.scripts/pubkeyfinder.sh'
+alias user='~/.scripts/createadmin.sh'
+alias ups3='~/.scripts/updates3site.sh'
+alias commit='~/.scripts/gitcommit.sh'
+alias update='~/.scripts/pullrepos.sh'
+alias wordpress='~/.scripts/updatewordpress.sh'
+alias agb='~/.scripts/addgitbranch.sh'
+alias upedfi='~/.scripts/updateeaedfibranch.sh'
+alias sha='~/.scripts/showsshsha.sh'
+alias copy='~/.scripts/copytoclipboard.sh'
+alias newkey='~/.scripts/createsshkey.sh'
+alias eards='~/.scripts/eardstunnel.sh'
+alias rerun='~/.scripts/stackrerun.sh'
+alias website='~/.scripts/.python-scripts/create-website.py'
+alias ghu='~/git/githired/scripts/update.sh'
+alias repotxt='~/.scripts/.python-scripts/repo-to-txt.py'
+
+# Source Script Aliases
+alias seaedfi='source ~/.scripts/eaedfiprofile.sh'
+alias seadata='source ~/.scripts/eadataprofile.sh'
+
+# Editor Aliases
+alias zrc='nano ~/.zshrc'
+alias brc='nano ~/.bashrc'
+
+# Tool Aliases
+alias oll='ollama run llama3.2:3b'
+alias int='interpreter'
+alias chat='aichat'
+alias rl='ramalama'
+
+# Custom application aliases
+{% if is_macos %}
+alias subl="open -a 'Sublime Text'"
+alias vsc="open -a 'Visual Studio Code'"
+{% endif %}
+
+# Add your custom aliases below
+{{ custom_aliases | default('') }}

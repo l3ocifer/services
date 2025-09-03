@@ -1,0 +1,128 @@
+---
+# Pre-flight checks and basic setup
+- name: Check if secrets file exists
+  stat:
+    path: "{{ secrets_file }}"
+  register: secrets_stat
+  ignore_errors: yes  # Don't fail if secrets don't exist yet
+  tags: ['always']
+
+- name: Include secrets file
+  include_vars:
+    file: "{{ secrets_file }}"
+  when: secrets_stat.stat.exists
+  tags: ['always']
+
+# Ensure passwordless sudo
+- name: Create backup directory for sudoers
+  file:
+    path: "/tmp/devenv_backup_{{ ansible_date_time.epoch }}"
+    state: directory
+    mode: '0700'
+  become: true
+  tags: ['always']
+
+- name: Backup main sudoers file
+  copy:
+    src: /etc/sudoers
+    dest: "/tmp/devenv_backup_{{ ansible_date_time.epoch }}/sudoers.bak"
+    remote_src: yes
+  become: true
+  tags: ['always']
+
+- name: Backup sudoers.d directory
+  copy:
+    src: /etc/sudoers.d/
+    dest: "/tmp/devenv_backup_{{ ansible_date_time.epoch }}/sudoers.d.bak"
+    remote_src: yes
+  become: true
+  when: ansible_os_family != "Darwin"  # macOS might not have this directory
+  tags: ['always']
+
+- name: Check if user has passwordless sudo
+  command: sudo -n true
+  register: sudo_check
+  ignore_errors: true
+  changed_when: false
+  tags: ['always']
+
+- name: Create sudoers.d directory if it doesn't exist
+  file:
+    path: /etc/sudoers.d
+    state: directory
+    mode: '0755'
+  become: true
+  when: sudo_check.rc != 0
+  tags: ['always']
+
+- name: Setup passwordless sudo for user
+  become: true
+  block:
+    - name: Add sudoers file for user
+      copy:
+        content: "{{ ansible_user_id }} ALL=(ALL) NOPASSWD: ALL"
+        dest: "/etc/sudoers.d/{{ ansible_user_id }}"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      register: sudo_config
+  rescue:
+    - name: Remove invalid sudoers file
+      file:
+        path: "/etc/sudoers.d/{{ ansible_user_id }}"
+        state: absent
+      when: sudo_config is failed
+    
+    - name: Fail with error message
+      fail:
+        msg: "Failed to configure passwordless sudo. Please check your sudo configuration."
+      when: sudo_config is failed
+  when: sudo_check.rc != 0
+  tags: ['always']
+
+# Load prerequisites
+- name: Load macOS prerequisites
+  include_tasks: prereq_darwin.yml
+  when: ansible_os_family == "Darwin"
+
+- name: Load Linux prerequisites
+  include_tasks: prereq_linux.yml
+  when: ansible_os_family == "Debian"
+
+# Setup core components
+- name: Setup git and repositories
+  include_tasks: git_setup.yml
+  tags: ['git']
+
+- name: Setup shell environment
+  include_tasks: shell.yml
+  tags: ['shell']
+
+- name: Setup SSH configuration
+  include_tasks: ssh.yml
+  tags: ['ssh']
+
+- name: Setup programming languages
+  include_tasks: languages.yml
+  tags: ['languages']
+
+- name: Setup DevOps tools
+  include_tasks: devops_tools.yml
+  tags: ['devops']
+
+- name: Setup applications
+  include_tasks: applications.yml
+  tags: ['apps']
+
+- name: Configure macOS defaults
+  include_tasks: macos_defaults.yml
+  when: ansible_os_family == "Darwin"
+  tags: ['macos']
+
+- name: Setup Syncthing
+  include_tasks: syncthing.yml
+  tags: ['sync']
+
+# Verify installation
+- name: Include verification tasks
+  include_tasks: verify.yml
+  tags: ['verify']

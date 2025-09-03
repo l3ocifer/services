@@ -1,0 +1,25 @@
+---
+# defaults file for roles/coolify
+
+# Installation directory
+coolify_install_dir: "/opt/coolify"
+
+# Coolify version
+coolify_version: "latest"
+
+# Coolify UI port
+coolify_ui_port: 3000
+
+# Coolify API port
+coolify_api_port: 8000
+
+# Application port range
+coolify_app_port_start: 9000
+coolify_app_port_end: 9100
+
+# Coolify configuration
+coolify_domain: "coolify.{{ ansible_hostname }}.internal"
+
+# Verification settings
+verification_retries: 10
+verification_delay: 30

@@ -1,0 +1,36 @@
+# Variables for desktop node (alef)
+---
+# AI Services
+ollama_enabled: true
+ollama_ram_limit: "40G"
+ollama_models:
+  - llama2
+  - codellama
+  - mistral
+
+librechat_enabled: true
+librechat_ram_limit: "4G"
+
+openwebui_enabled: true
+openwebui_ram_limit: "2G"
+
+# Media Services
+jellyfin_enabled: true
+jellyfin_ram_limit: "4G"
+media_path: "/data/media"
+transcoding_path: "/data/transcoding"
+
+# Monitoring
+prometheus_disabled: false
+grafana_disabled: false
+prometheus_retention_size: "30GB"
+prometheus_ram_limit: "2G"
+grafana_ram_limit: "1G"
+
+# Database
+whodb_enabled: true
+whodb_ram_limit: "1G"
+
+# Analytics
+umami_enabled: true
+umami_ram_limit: "512M"

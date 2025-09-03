@@ -1,0 +1,248 @@
+---
+# Platform detection
+platform: "{{ ansible_os_family | lower }}"
+is_macos: "{{ ansible_os_family == 'Darwin' }}"
+is_linux: "{{ ansible_os_family == 'Debian' }}"
+is_wsl: "{{ ansible_env.WSL_DISTRO_NAME is defined }}"
+
+# Core paths
+git_base_dir: "~/git"
+scripts_dir: "~/.scripts"
+devenv_dir: "{{ git_base_dir }}/devenv"
+secrets_file: "~/.config/personal/secrets.yml"
+
+# Configuration files with their source and destination paths
+config_files:
+  # Core configs
+  - { src: "{{ devenv_dir }}/config/inputrc", dest: "~/.inputrc", required: true }
+  - { src: "{{ devenv_dir }}/config/zshrc", dest: "~/.zshrc", required: true, template: "zshrc.j2" }
+  - { src: "{{ devenv_dir }}/config/gitconfig", dest: "~/.gitconfig", required: true, template: "gitconfig-client.j2" }
+  - { src: "{{ devenv_dir }}/config/gitconfig-provisions", dest: "~/.gitconfig-provisions", required: true }
+  # Shell configs
+  - { src: "{{ devenv_dir }}/config/zsh/aliases", dest: "~/.config/personal/zsh/aliases", required: true, template: "aliases.j2" }
+  - { src: "{{ devenv_dir }}/config/zsh/exports", dest: "~/.config/personal/zsh/exports", required: true, template: "exports.j2" }
+  # Git configs
+  - { src: "{{ devenv_dir }}/config/git/config", dest: "~/.config/personal/git/config", required: true, template: "gitconfig-client.j2" }
+  # SSH configs
+  - { src: "{{ devenv_dir }}/config/ssh/config", dest: "~/.config/personal/ssh/config", required: true, template: "ssh_config.j2" }
+  # Application configs
+  - { src: "{{ devenv_dir }}/config/cursor/settings.json", dest: "~/.config/personal/cursor/settings.json", required: false }
+  - { src: "{{ devenv_dir }}/config/zed/settings.json", dest: "~/.config/personal/zed/settings.json", required: false }
+  - { src: "{{ devenv_dir }}/config/pulsar/config.cson", dest: "~/.config/personal/pulsar/config.cson", required: false }
+  - { src: "{{ devenv_dir }}/config/logseq/config.edn", dest: "~/.config/personal/logseq/config.edn", required: false }
+
+# Repository configurations
+repositories:
+  devenv:
+    repo: "git@github.com:l3ocifer/devenv.git"
+    dest: "{{ devenv_dir }}"
+  scripts:
+    repo: "git@github.com:l3ocifer/scripts.git"
+    dest: "{{ scripts_dir }}"
+
+# SSH Configuration
+ssh_config_dir: "~/.ssh"
+ssh_keys: []
+
+# Application configuration symlinks
+config_symlinks:
+  - src: "~/.config/personal/cursor/settings.json"
+    dest: "~/Library/Application Support/Cursor/User/settings.json"
+  - src: "~/.config/personal/zed/settings.json"
+    dest: "~/Library/Application Support/Zed/settings.json"
+  - src: "~/.config/personal/pulsar/config.cson"
+    dest: "~/.pulsar/config.cson"
+  - src: "~/.config/personal/logseq/config.edn"
+    dest: "~/.logseq/config.edn"
+  - src: "~/.config/personal/windsurf/config/settings.json"
+    dest: "~/Library/Application Support/Windsurf/config/settings.json"
+
+# Mac App Store applications
+macos_mas_apps:
+  - name: "ChatGPT"
+    id: "6448311069"
+  - name: "Claude"
+    id: "6470116884"
+  - name: "TestFlight"
+    id: "899247664"
+  - name: "WYZE"
+    id: "1288415553"
+
+# macOS Applications
+macos_homebrew_apps:
+  - name: "1password-cli"
+    cask: false
+  - name: "act"
+    cask: false
+
+# Desktop Applications
+desktop_apps:
+  # Development Tools
+  - name: "Cursor"
+    brew: "cursor"
+    macos_only: true
+  - name: "Zed"
+    brew: "zed"
+    wsl_compatible: false
+  - name: "Pulsar"
+    brew: "pulsar"
+    wsl_compatible: false
+  - name: "Logseq"
+    brew: "logseq"
+    wsl_compatible: false
+  - name: "Docker"
+    brew: "docker"
+    package: "docker-ce"
+    wsl_compatible: true
+  - name: "Vagrant"
+    brew: "vagrant"
+    package: "vagrant"
+    wsl_compatible: true
+  
+  # Browsers
+  - name: "Google Chrome"
+    brew: "google-chrome"
+    package: "google-chrome-stable"
+    wsl_compatible: false
+  - name: "Brave Browser"
+    brew: "brave-browser"
+    package: "brave-browser"
+    wsl_compatible: false
+  - name: "Thunderbird"
+    brew: "thunderbird"
+    package: "thunderbird"
+    wsl_compatible: false
+
+  # AI Tools
+  - name: "Wispr Flow"
+    url: "https://wisprflow.com"
+    wsl_compatible: false
+
+# Linux repositories (PPAs and other sources)
+linux_repositories: []
+
+# Linux Applications
+linux_apps:
+  # Development Tools
+  - name: "Zed"
+    package: "zed"
+  - name: "Pulsar"
+    package: "pulsar"
+  - name: "Logseq"
+    package: "logseq"
+  - name: "Docker"
+    package: "docker-ce"
+  - name: "Vagrant"
+    package: "vagrant"
+  
+  # Browsers
+  - name: "Google Chrome"
+    package: "google-chrome-stable"
+  - name: "Brave Browser"
+    package: "brave-browser"
+  - name: "Thunderbird"
+    package: "thunderbird"
+
+  # AI Tools
+  - name: "Wispr Flow"
+    url: "https://wisprflow.com"
+
+# CLI Development Tools
+cli_dev_tools:
+  - name: "colima"
+    macos_only: true
+  - name: "podman"
+
+# Python Tools
+python_tools:
+  - thefuck
+  - aichat
+  - sherlock
+
+# Shell Tools
+shell_tools:
+  - thefuck
+  - starship
+  - zoxide
+  - atuin
+  - ripgrep
+  - fd
+  - bat
+  - eza  # Modern ls replacement (fork of exa)
+  - tmux
+  - direnv
+  - ollama
+
+# CLI Tools
+cli_tools:
+  - name: git
+    packages: ["git", "git-lfs"]
+  - name: python
+    packages: ["python", "ipython", "pytest", "black", "flake8", "mypy"]
+  - name: node
+    packages: ["node", "typescript", "yarn"]
+  - name: aws
+    packages: ["awscli", "aws-sam-cli"]
+  - name: terraform
+    packages: ["terraform", "terragrunt"]
+  - name: kubernetes
+    packages: ["kubectl", "helm", "k9s", "kind", "kubectx"]
+  - name: devops
+    packages: 
+      - "ansible"
+      - "ansible-lint"
+      - "packer"
+      - "vault"
+      - "minio-mc"
+      - "dive"  # Docker image explorer
+      - "lazydocker"
+      - "k6"  # Load testing
+      - "hey"  # HTTP load generator
+  - name: cloud
+    packages:
+      - "doctl"  # DigitalOcean CLI
+      - "azure-cli"
+      - "google-cloud-sdk"
+  - name: monitoring
+    packages:
+      - "prometheus"
+      - "grafana"
+      - "loki"    # Log aggregation
+
+# Syncthing Configuration
+syncthing_device_id: "{{ ansible_hostname }}_{{ ansible_date_time.epoch }}"
+syncthing_secrets_folder_id: "personal"
+syncthing_scripts_folder_id: "scripts"
+syncthing_ssh_folder_id: "ssh"
+syncthing_git_folder_id: "git"
+syncthing_dotnet_folder_id: "dotnet"
+syncthing_api_key: "{{ app_secrets.syncthing.api_key }}"
+
+# Zsh Configuration
+oh_my_zsh_dir: "{{ '~/.oh-my-zsh' | expanduser }}"
+oh_my_zsh_custom: "{{ oh_my_zsh_dir }}/custom"
+zsh_plugins:
+  - name: zsh-autosuggestions
+    repo: https://github.com/zsh-users/zsh-autosuggestions.git
+  - name: zsh-syntax-highlighting
+    repo: https://github.com/zsh-users/zsh-syntax-highlighting.git
+
+# AI Configuration
+ai_model_name: llama3.2:3b
+ai_theme: dark
+
+# Programming Languages
+languages:
+  python:
+    version: "3.11"
+  node:
+    version: "20"
+  ruby:
+    version: "3.2.0"
+    gems:
+      - bundler
+      - rails
+  go:
+    version: "1.21"
+  dotnet:
+    version: "8.0"

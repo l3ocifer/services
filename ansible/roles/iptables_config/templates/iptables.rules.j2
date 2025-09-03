@@ -1,0 +1,79 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+:MISTBORN_LOG - [0:0]
+
+# Allow established and related connections
+-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# Allow loopback
+-A INPUT -i lo -j ACCEPT
+
+# Allow WireGuard
+-A INPUT -p udp -m multiport --dports {{ wireguard_ports | join(',') }} -j ACCEPT
+
+# Allow SSH only from WireGuard network
+-A INPUT -s 10.15.91.0/24 -p tcp --dport 22 -j ACCEPT
+
+{% if ssh_source_ip is defined %}
+# Allow SSH from original install IP
+-A INPUT -s {{ ssh_source_ip }} -p tcp --dport 22 -j ACCEPT
+{% endif %}
+
+# Allow internal network access from homelab nodes
+-A INPUT -s 192.168.1.200/32 -j ACCEPT  # alef
+-A INPUT -s 192.168.1.201/32 -j ACCEPT  # legion001
+-A INPUT -s 192.168.1.202/32 -j ACCEPT  # legion002
+-A INPUT -s 192.168.1.203/32 -j ACCEPT  # legion003
+-A INPUT -s 192.168.1.204/32 -j ACCEPT  # legion004
+-A INPUT -s 192.168.1.205/32 -j ACCEPT  # legion005
+-A INPUT -s 192.168.1.206/32 -j ACCEPT  # legion006
+-A INPUT -s 192.168.1.207/32 -j ACCEPT  # legion007
+-A INPUT -s 192.168.1.208/32 -j ACCEPT  # legion008
+-A INPUT -s 192.168.1.209/32 -j ACCEPT  # legion009
+-A INPUT -s 192.168.1.210/32 -j ACCEPT  # legion010
+-A INPUT -s 192.168.1.211/32 -j ACCEPT  # legion011
+-A INPUT -s 192.168.1.212/32 -j ACCEPT  # legion012
+-A INPUT -s 192.168.1.213/32 -j ACCEPT  # legion013
+-A INPUT -s 192.168.1.214/32 -j ACCEPT  # legion014
+-A INPUT -s 192.168.1.215/32 -j ACCEPT  # legion015
+-A INPUT -s 192.168.1.216/32 -j ACCEPT  # legion016
+-A INPUT -s 192.168.1.219/32 -j ACCEPT  # legion019
+-A INPUT -s 192.168.1.220/32 -j ACCEPT  # legion020
+-A INPUT -s 192.168.1.221/32 -j ACCEPT  # legion021
+-A INPUT -s 192.168.1.222/32 -j ACCEPT  # legion022
+-A INPUT -s 192.168.1.224/32 -j ACCEPT  # legion024
+-A INPUT -s 192.168.1.228/32 -j ACCEPT  # legion028
+-A INPUT -s 192.168.1.229/32 -j ACCEPT  # legion029
+-A INPUT -s 192.168.1.231/32 -j ACCEPT  # legion031
+-A INPUT -s 192.168.1.234/32 -j ACCEPT  # legion034
+-A INPUT -s 192.168.1.235/32 -j ACCEPT  # legion035
+-A INPUT -s 192.168.1.236/32 -j ACCEPT  # legion036
+-A INPUT -s 192.168.1.237/32 -j ACCEPT  # legion037
+-A INPUT -s 192.168.1.238/32 -j ACCEPT  # legion038
+-A INPUT -s 192.168.1.240/32 -j ACCEPT  # legion040
+
+# Allow SSH access from internal network
+-A INPUT -s 192.168.1.0/24 -p tcp --dport 22 -j ACCEPT
+
+# Block outbound DNS except from dnscrypt-proxy
+-A OUTPUT -p udp --dport 53 -m owner ! --uid-owner {{ dnscrypt_user }} -j DROP
+
+# Log dropped packets
+-A INPUT -j MISTBORN_LOG
+-A MISTBORN_LOG -m limit --limit 2/min -j LOG --log-prefix "IPTables-Dropped: " --log-level 4
+-A MISTBORN_LOG -j DROP
+
+COMMIT
+
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+
+# NAT for WireGuard clients
+-A POSTROUTING -s 10.15.91.0/24 -o {{ ansible_default_ipv4.interface }} -j MASQUERADE
+
+COMMIT

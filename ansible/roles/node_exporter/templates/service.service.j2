@@ -1,0 +1,24 @@
+[Unit]
+Description={{ service_name }} service
+After=network.target
+
+[Service]
+Type=simple
+User={{ service_user }}
+Group={{ service_group }}
+WorkingDirectory={{ service_home }}
+ExecStart=/usr/local/bin/{{ service_name }}
+Restart={{ service_restart }}
+RestartSec={{ service_restart_sec }}
+
+# Security hardening
+ProtectSystem=full
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+{
+  "theme": "One Dark",
+  "telemetry": {
+    "diagnostics": false,
+    "metrics": false
+  },
+  "vim_mode": true,
+  "terminal": {
+    "scrollback": 9999,
+    "font_family": "{{ terminal_font | default('JetBrains Mono') }}",
+    "font_size": {{ terminal_font_size | default(14) }},
+    "working_directory": "current_project_directory"
+  },
+  "editor": {
+    "font_family": "{{ editor_font | default('JetBrains Mono') }}",
+    "font_size": {{ editor_font_size | default(14) }},
+    "line_height": 1.5,
+    "show_whitespaces": "selection",
+    "tab_size": 2,
+    "hard_tabs": false,
+    "auto_format_on_save": true
+  }
+}

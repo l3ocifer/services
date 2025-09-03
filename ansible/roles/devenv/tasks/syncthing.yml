@@ -1,0 +1,153 @@
+---
+# Install Syncthing
+- name: Install Syncthing (MacOS)
+  community.general.homebrew:
+    name: syncthing
+    state: present
+  when: is_macos
+
+- name: Install Syncthing (Linux)
+  block:
+    - name: Add Syncthing apt key
+      ansible.builtin.apt_key:
+        url: https://syncthing.net/release-key.gpg
+        state: present
+      when: is_linux
+
+    - name: Add Syncthing repository
+      ansible.builtin.apt_repository:
+        repo: deb https://apt.syncthing.net/ syncthing stable
+        state: present
+        filename: syncthing
+      when: is_linux
+
+    - name: Install Syncthing package
+      ansible.builtin.apt:
+        name: syncthing
+        state: present
+        update_cache: yes
+      when: is_linux
+  when: is_linux
+
+# Create basic directory structure
+- name: Create Syncthing directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "~/.config/syncthing"
+
+# Note: Further Syncthing configuration is temporarily disabled
+# and will be handled manually until automation is improved
+
+# - name: Load secrets from config directory
+#   ansible.builtin.include_vars:
+#     file: "{{ secrets_file }}"
+#     name: app_secrets
+#   ignore_errors: true
+# 
+# - name: Configure Syncthing
+#   block:
+#     - name: Create temporary directory for Syncthing config
+#       ansible.builtin.tempfile:
+#         state: directory
+#         suffix: syncthing_config
+#       register: syncthing_temp_dir
+# 
+#     - name: Generate default Syncthing configuration
+#       ansible.builtin.command:
+#         cmd: "syncthing generate --config={{ syncthing_temp_dir.path }}"
+#       register: syncthing_generate
+#       changed_when: syncthing_generate.rc == 0
+#       when: is_macos
+# 
+#     - name: Validate Syncthing configuration (MacOS)
+#       ansible.builtin.command:
+#         cmd: "syncthing cli config validate {{ syncthing_temp_dir.path }}/config.xml"
+#       register: syncthing_validate
+#       changed_when: syncthing_validate.rc == 0
+#       when: is_macos
+#       ignore_errors: true
+# 
+#     - name: Apply Syncthing configuration (MacOS)
+#       ansible.builtin.command:
+#         cmd: "syncthing cli config {{ item }}"
+#       loop:
+#         - "folders add {{ syncthing_secrets_folder_id }} {{ '~/.config/personal' | expanduser }}"
+#         - "folders add {{ syncthing_scripts_folder_id }} {{ scripts_dir | expanduser }}"
+#         - "folders add {{ syncthing_ssh_folder_id }} {{ '~/.ssh' | expanduser }}"
+#         - "folders add {{ syncthing_git_folder_id }} {{ git_base_dir | expanduser }}"
+#       when: 
+#         - is_macos 
+#         - syncthing_validate.rc == 0
+#         - app_secrets is defined
+#         - app_secrets.syncthing is defined
+#         - app_secrets.syncthing.api_key is defined
+# 
+#     - name: Configure Syncthing (Linux)
+#       template:
+#         src: syncthing_config.xml.j2
+#         dest: "~/.config/syncthing/config.xml"
+#         mode: '0600'
+#       when: 
+#         - not is_macos
+#         - app_secrets is defined
+#         - app_secrets.syncthing is defined
+#         - app_secrets.syncthing.api_key is defined
+#   always:
+#     - name: Cleanup temporary directory
+#       ansible.builtin.file:
+#         path: "{{ syncthing_temp_dir.path }}"
+#         state: absent
+#       when: syncthing_temp_dir.path is defined
+#   tags: ['syncthing']
+# 
+# # Service Management
+# - name: Start Syncthing service (Linux)
+#   systemd:
+#     name: syncthing@{{ ansible_user_id }}
+#     state: started
+#     enabled: yes
+#   become: true
+#   when: is_linux
+#   tags: ['syncthing']
+# 
+# - name: Start Syncthing service (macOS)
+#   command: brew services start syncthing
+#   register: syncthing_service_start
+#   changed_when: "'Successfully started' in syncthing_service_start.stdout"
+#   failed_when: syncthing_service_start.rc != 0 and 'already started' not in syncthing_service_start.stderr
+#   when: is_macos
+#   tags: ['syncthing']
+# 
+# - name: Wait for Syncthing service
+#   wait_for:
+#     port: 8384
+#     timeout: 30
+#   when: syncthing_service_start is changed
+#   tags: ['syncthing']
+# 
+# # Verify Installation
+# - name: Verify Syncthing is running
+#   command: pgrep syncthing
+#   register: syncthing_check
+#   changed_when: false
+#   retries: 3
+#   delay: 5
+#   until: syncthing_check.rc == 0
+#   tags: ['syncthing']
+
+- name: Ensure Syncthing config directory exists
+  ansible.builtin.file:
+    path: "~/.config/syncthing"
+    state: directory
+    mode: '0755'
+  tags: ['sync']
+
+- name: Create Syncthing config
+  ansible.builtin.template:
+    src: "syncthing_config.xml.j2"
+    dest: "~/.config/syncthing/config.xml"
+    mode: '0644'
+  tags: ['sync']

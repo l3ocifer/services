@@ -1,0 +1,65 @@
+http:
+  middlewares:
+    coolify-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  routers:
+    coolify:
+      rule: "Host(`coolify.codeofconsciousness.com`)"
+      service: coolify
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - security@file
+
+    coolify-http:
+      rule: "Host(`coolify.codeofconsciousness.com`)"
+      service: coolify
+      entryPoints:
+        - web
+      middlewares:
+        - coolify-redirect
+
+    coolify-ws:
+      rule: "Host(`coolify.codeofconsciousness.com`) && PathPrefix(`/socket.io`)"
+      service: coolify-ws
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    coolify-terminal:
+      rule: "Host(`coolify.codeofconsciousness.com`) && PathPrefix(`/terminal`)"
+      service: coolify-terminal
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    coolify-local:
+      rule: "HostRegexp(`{host:(coolify.localhost|coolify.lan|localhost:8000|127.0.0.1:8000|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      service: coolify
+      entryPoints:
+        - web
+      middlewares:
+        - local-only@file
+
+  services:
+    coolify:
+      loadBalancer:
+        servers:
+          - url: "http://coolify-codeofconsciousness:8080"
+    
+    coolify-ws:
+      loadBalancer:
+        servers:
+          - url: "http://coolify-codeofconsciousness:6001"
+    
+    coolify-terminal:
+      loadBalancer:
+        servers:
+          - url: "http://coolify-codeofconsciousness:6002"

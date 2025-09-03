@@ -1,0 +1,7 @@
+# AWS Config file managed by Ansible
+
+{% for profile in aws_profiles %}
+[profile {{ profile.name }}]
+region = {{ profile.region }}
+output = {{ profile.output | default('json') }}
+{% endfor %}

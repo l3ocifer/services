@@ -1,0 +1,121 @@
+---
+# Deployment order and dependencies
+
+phases:
+  1_base_security:
+    - ufw            # Base firewall
+    - iptables_config # Core firewall rules
+    - fail2ban       # Intrusion prevention
+    
+  2_network_core:
+    - wireguard      # VPN
+    - hickory_dns    # DNS server
+    - traefik        # Reverse proxy
+    - authelia       # Authentication
+    
+  3_monitoring_base:
+    - node_exporter  # System metrics
+    - prometheus     # Metrics collection
+    - loki          # Logging
+    - grafana       # Visualization
+    
+  4_storage_backup:
+    - restic        # Backup system
+    - syncthing     # File sync
+    
+  5_security_services:
+    - vaultwarden   # Password management
+    - logto         # Identity
+    
+  6_automation:
+    - home_assistant
+    - homekit_bridge
+    - diyhue
+    - n8n
+    - huginn
+    
+  7_media:
+    - kodi
+    - retro_pi
+    
+  8_communication:
+    - matrix
+    - jitsi
+    - guacamole
+    
+  9_ai_services:
+    - ollama
+    - mistral_rs
+    - librechat
+    - openwebui
+    
+  10_development:
+    - rustdesk
+    - rustpad
+    - coolify
+    - postiz
+
+# Resource requirements by node type
+node_requirements:
+  main_server:  # alef
+    min_ram_gb: 32
+    min_storage_gb: 200
+    services:
+      - ollama
+      - mistral_rs
+      - kodi
+      - matrix
+      
+  legion_nodes:  # Raspberry Pi cluster
+    min_ram_mb: 900
+    min_storage_gb: 16
+    max_services_per_node: 2
+    suitable_services:
+      - node_exporter
+      - hickory_dns
+      - home_assistant
+      - n8n
+      - huginn
+
+# Service dependencies
+dependencies:
+  traefik:
+    - wireguard
+    - iptables_config
+    
+  authelia:
+    - traefik
+    
+  matrix:
+    - traefik
+    - postgresql
+    
+  home_assistant:
+    - traefik
+    - postgresql
+    
+  ollama:
+    - traefik
+    
+  mistral_rs:
+    - traefik
+    
+  grafana:
+    - prometheus
+    - loki
+
+# Backup priorities
+backup_priorities:
+  critical:
+    - vaultwarden
+    - matrix
+    - home_assistant
+    - postgresql
+    
+  important:
+    - kodi
+    - syncthing
+    
+  standard:
+    - n8n
+    - huginn

@@ -1,0 +1,39 @@
+[user]
+    name = {{ git_user_name if item.name == 'personal' else provisions_git_name }}
+    email = {{ item.email | default(git_user_email) }}
+{% if item.signingkey is defined %}
+    signingkey = {{ item.signingkey }}
+{% endif %}
+
+{% if item.commit_gpgsign is defined %}
+[commit]
+    gpgsign = {{ item.commit_gpgsign | lower }}
+{% endif %}
+
+[url "git@{{ item.domain }}:{{ item.org }}/"]
+    insteadOf = https://{{ item.domain }}/{{ item.org }}/
+
+{% if item.url_format is defined %}
+[url "{{ item.url_format | replace('{org}', item.org) }}"]
+    insteadOf = https://{{ item.domain }}/{{ item.org }}/
+{% endif %}
+
+{% if item.name == 'provisions' or item.name == 'provisions-bitbucket' %}
+[core]
+    longpaths = true
+    compression = 9
+    packedGitLimit = 512m
+    packedGitWindowSize = 512m
+
+[pack]
+    deltaCacheSize = 2047m
+    packSizeLimit = 2047m
+    windowMemory = 2047m
+
+[credential "https://bitbucket.org"]
+    helper = cache --timeout=604800
+{% endif %}
+
+{% if item.custom_config is defined %}
+{{ item.custom_config }}
+{% endif %}

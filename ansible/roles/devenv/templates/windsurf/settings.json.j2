@@ -1,0 +1,20 @@
+{
+  "terminal": {
+    "scrollback_lines": 9999,
+    "font": {
+      "family": "{{ terminal_font | default('JetBrains Mono') }}",
+      "size": {{ terminal_font_size | default(14) }}
+    }
+  },
+  "editor": {
+    "font_family": "{{ editor_font | default('JetBrains Mono') }}",
+    "font_size": {{ editor_font_size | default(14) }},
+    "tab_size": 2,
+    "vim_mode": true
+  },
+  "theme": "dark",
+  "telemetry": false,
+  "updates": {
+    "check_automatically": false
+  }
+}

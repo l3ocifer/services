@@ -1,0 +1,47 @@
+---
+# Global variables for all hosts
+
+# Network Configuration
+network_domain: "homelab.local"
+network_subnet: "192.168.1.0/24"
+
+# System Configuration
+timezone: "America/New_York"
+locale: "en_US.UTF-8"
+ntp_servers:
+  - "0.pool.ntp.org"
+  - "1.pool.ntp.org"
+
+# Security Configuration
+ssh_port: 22
+fail2ban_enabled: true
+ufw_enabled: true
+backup_enabled: true
+
+# Monitoring Configuration
+node_exporter_enabled: true
+prometheus_retention_days: 15
+grafana_admin_user: "admin"
+
+# Docker Configuration
+docker_edition: "ce"
+docker_compose_version: "2.23.0"
+
+# Backup Configuration
+restic_backup_schedule: "0 2 * * *"  # 2 AM daily
+backup_retention:
+  daily: 7
+  weekly: 4
+  monthly: 6
+
+# Update Configuration
+system_update_schedule: "0 4 * * 0"  # 4 AM on Sundays
+security_update_schedule: "0 4 * * *"  # 4 AM daily
+
+# Default Resource Limits
+default_memory_limit: "256m"
+default_cpu_limit: "0.5"
+
+# Service Discovery
+consul_enabled: false
+service_discovery_method: "dns"  # dns or consul

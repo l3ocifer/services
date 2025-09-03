@@ -1,0 +1,64 @@
+---
+- name: Verify Docker is running
+  ansible.builtin.service_facts:
+  register: service_status
+  tags: ['coolify', 'verify']
+
+- name: Fail if Docker is not running
+  ansible.builtin.fail:
+    msg: "Docker service is not running. Please ensure Docker is installed and running."
+  when: "'docker.service' not in service_status.ansible_facts.services or service_status.ansible_facts.services['docker.service'].state != 'running'"
+  tags: ['coolify', 'verify']
+
+- name: Wait for Coolify container to be healthy
+  community.docker.docker_container_info:
+    name: coolify
+  register: coolify_status
+  until: 
+    - coolify_status.container is defined
+    - coolify_status.container.State is defined
+    - coolify_status.container.State.Running is defined
+    - coolify_status.container.State.Running == true
+    - coolify_status.container.State.Health is defined
+    - coolify_status.container.State.Health.Status is defined
+    - coolify_status.container.State.Health.Status == "healthy"
+  retries: "{{ verification_retries | default(10) }}"
+  delay: "{{ verification_delay | default(30) }}"
+  tags: ['coolify', 'verify']
+
+- name: Verify Coolify API is responding
+  ansible.builtin.uri:
+    url: "http://localhost:{{ coolify_api_port | default(8000) }}/api/v1/status"
+    return_content: yes
+    status_code: 200
+  register: api_check
+  retries: 3
+  delay: 10
+  until: api_check.status == 200
+  tags: ['coolify', 'verify']
+
+- name: Verify required ports are listening
+  ansible.builtin.wait_for:
+    port: "{{ item }}"
+    timeout: 30
+  loop:
+    - "{{ coolify_ui_port | default(3000) }}"  # Coolify UI
+    - "{{ coolify_api_port | default(8000) }}"  # API port
+  tags: ['coolify', 'verify']
+
+- name: Verify Docker network exists
+  ansible.builtin.command: docker network inspect coolify
+  changed_when: false
+  register: network_check
+  tags: ['coolify', 'verify']
+
+- name: Output verification status
+  ansible.builtin.debug:
+    msg: |
+      Coolify Verification Results:
+      - Docker Service: {{ 'docker.service' in service_status.ansible_facts.services and service_status.ansible_facts.services['docker.service'].state == 'running' }}
+      - Container Running: {{ coolify_status.container.State.Running | default(false) }}
+      - Container Healthy: {{ coolify_status.container.State.Health.Status == "healthy" | default(false) }}
+      - API Responding: {{ api_check.status == 200 | default(false) }}
+      - Network Config: {{ network_check.rc == 0 | default(false) }}
+  tags: ['coolify', 'verify']

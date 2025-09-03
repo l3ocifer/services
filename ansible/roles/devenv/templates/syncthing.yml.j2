@@ -1,0 +1,12 @@
+---
+syncthing:
+  api_key: "{{ syncthing_api_key | default('') }}"
+  folders:
+    - id: "{{ syncthing_secrets_folder_id }}"
+      path: "~/.config/personal"
+    - id: "{{ syncthing_scripts_folder_id }}"
+      path: "{{ scripts_dir }}"
+    - id: "{{ syncthing_ssh_folder_id }}"
+      path: "~/.ssh"
+    - id: "{{ syncthing_git_folder_id }}"
+      path: "{{ git_base_dir }}"

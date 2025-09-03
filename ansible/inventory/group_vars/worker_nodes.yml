@@ -1,0 +1,42 @@
+# Variables for Raspberry Pi worker nodes
+---
+# Resource limits
+memory_limit: "{{ raspi_memory_limit }}"
+swap_size: "{{ raspi_swap_size }}"
+
+# Chat services
+matrix_enabled: true
+matrix_domain: "chat.{{ domain_name }}"
+rocket_chat_enabled: true
+rocket_chat_domain: "team.{{ domain_name }}"
+
+# Remote access
+rustdesk_enabled: true
+rustpad_enabled: true
+guacamole_enabled: true
+guacamole_domain: "remote.{{ domain_name }}"
+
+# Automation
+huginn_enabled: true
+huginn_domain: "automate.{{ domain_name }}"
+n8n_enabled: true
+n8n_domain: "workflow.{{ domain_name }}"
+
+# Storage
+syncthing_enabled: true
+syncthing_gui_address: "0.0.0.0:8384"
+
+# Gaming
+retro_pi_enabled: true
+
+# Backup settings
+backup_retention_days: 30
+backup_schedule: "0 2 * * *"  # 2 AM daily
+
+# API Gateway
+postiz_enabled: true
+postiz_domain: "api.{{ domain_name }}"
+
+# Monitoring
+uptime_kuma_enabled: true
+uptime_kuma_domain: "status.{{ domain_name }}"

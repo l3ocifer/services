@@ -1,0 +1,111 @@
+---
+# Pre-flight checks
+- name: Verify system requirements
+  ansible.builtin.assert:
+    that:
+      - ansible_memtotal_mb >= min_ram_mb
+      - ansible_processor_vcpus >= min_cpu_cores
+    msg: "System does not meet minimum requirements. Need {{ min_ram_mb }}MB RAM and {{ min_cpu_cores }} CPU cores"
+
+# Installation tasks
+- name: Install required packages
+  ansible.builtin.package:
+    name: "{{ service_packages }}"
+    state: present
+  register: package_install
+
+- name: Create service user and group
+  ansible.builtin.user:
+    name: "{{ service_user }}"
+    group: "{{ service_group }}"
+    system: yes
+    create_home: no
+  register: user_setup
+
+- name: Create required directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0750'
+  loop:
+    - "{{ service_home }}"
+    - "{{ service_config_dir }}"
+    - "{{ service_data_dir }}"
+    - "{{ service_log_dir }}"
+  register: dir_setup
+
+- name: Configure service
+  ansible.builtin.template:
+    src: "config.yml.j2"
+    dest: "{{ service_config_file }}"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+  register: config_setup
+  notify: restart service
+
+# Service verification
+- name: Verify service installation
+  block:
+    - name: Check service binary
+      ansible.builtin.command: "which {{ service_name }}"
+      changed_when: false
+      register: binary_check
+      failed_when: binary_check.rc != 0
+
+    - name: Verify service is running
+      ansible.builtin.service:
+        name: "{{ service_name }}"
+        state: started
+      register: service_check
+      failed_when: not service_check.status.ActiveState == "active"
+
+    - name: Check service configuration
+      ansible.builtin.stat:
+        path: "{{ service_config_file }}"
+      register: config_check
+      failed_when: not config_check.stat.exists
+
+    - name: Verify service port
+      ansible.builtin.wait_for:
+        port: "{{ service_port }}"
+        timeout: 30
+      when: service_port is defined
+      register: port_check
+
+    - name: Check service health endpoint
+      ansible.builtin.uri:
+        url: "http://{{ service_host }}:{{ service_port }}/health"
+        method: GET
+        status_code: 200
+      register: health_check
+      when: service_health_check_enabled | default(false)
+      retries: 3
+      delay: 10
+      until: health_check is success
+
+    - name: Verify backup configuration
+      ansible.builtin.stat:
+        path: "{{ service_backup_config | default('') }}"
+      register: backup_check
+      when: service_backup_enabled | default(false)
+      failed_when: service_backup_enabled and not backup_check.stat.exists
+
+  always:
+    - name: Record verification results
+      ansible.builtin.set_fact:
+        role_verified: "{{ 
+          binary_check is success and 
+          service_check is success and 
+          config_check is success and 
+          (not service_port is defined or port_check is success) and 
+          (not service_health_check_enabled | default(false) or health_check is success) and 
+          (not service_backup_enabled | default(false) or backup_check is success)
+        }}"
+
+    - name: Report verification status
+      ansible.builtin.debug:
+        msg: "Role {{ role_name }} verification {{ 'succeeded' if role_verified else 'failed' }}"
+      failed_when: not role_verified

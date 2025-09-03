@@ -1,0 +1,102 @@
+---
+# Default variables for iptables configuration
+
+# Network configuration
+internal_network: "192.168.1.0/24"
+main_server_ip: "192.168.1.200"  # alef
+legion_network_start: "192.168.1.201"
+legion_network_end: "192.168.1.240"
+
+# WireGuard ports to open
+wireguard_ports:
+  - 51820  # Default WireGuard port
+  - 53     # Alternative for firewall bypass
+  - 443    # Alternative for firewall bypass
+
+# DNSCrypt proxy user
+dnscrypt_user: _dnscrypt-proxy
+
+# Network interface
+network_interface: "{{ ansible_default_ipv4.interface }}"
+
+# WireGuard network
+wireguard_network: "10.15.91.0/24"
+
+# Logging settings
+logging:
+  enabled: true
+  prefix: "IPTables-Dropped: "
+  level: 4
+  limit_rate: "2/min"
+
+# Security settings
+security:
+  block_outbound_dns: true  # Block DNS except from dnscrypt-proxy
+  allow_ssh_wireguard: true # Allow SSH from WireGuard network
+  allow_internal_ssh: true  # Allow SSH from internal network
+  log_dropped: true        # Log dropped packets
+
+# Node groups with resource considerations
+# Light services (< 256MB RAM, minimal CPU)
+dns_nodes:
+  - "192.168.1.201"  # legion001 - hickory_dns
+  - "192.168.1.202"  # legion002 - hickory_dns backup
+  - "192.168.1.203"  # legion003 - node_exporter
+
+# Monitoring nodes (< 512MB RAM)
+monitoring_nodes:
+  - "192.168.1.204"  # legion004 - prometheus
+  - "192.168.1.205"  # legion005 - loki
+  - "192.168.1.206"  # legion006 - uptime-kuma
+
+# Automation nodes (< 512MB RAM)
+automation_nodes:
+  - "192.168.1.207"  # legion007 - n8n
+  - "192.168.1.208"  # legion008 - huginn
+  - "192.168.1.209"  # legion009 - home_assistant
+  - "192.168.1.210"  # legion010 - homekit_bridge
+
+# General purpose nodes for lighter services
+general_purpose_nodes:
+  # Security & Identity (< 512MB RAM)
+  - "192.168.1.211"  # legion011 - vaultwarden
+  - "192.168.1.212"  # legion012 - logto
+  
+  # Communication (< 512MB RAM)
+  - "192.168.1.213"  # legion013 - matrix
+  - "192.168.1.214"  # legion014 - jitsi
+  - "192.168.1.215"  # legion015 - guacamole
+  
+  # Development tools (< 512MB RAM)
+  - "192.168.1.216"  # legion016 - rustdesk
+  - "192.168.1.219"  # legion019 - rustpad
+  - "192.168.1.220"  # legion020 - postiz
+  
+  # Storage & Sync (< 512MB RAM, storage-dependent)
+  - "192.168.1.221"  # legion021 - syncthing
+  - "192.168.1.222"  # legion022 - restic
+  
+  # Additional monitoring & metrics
+  - "192.168.1.224"  # legion024 - grafana
+  - "192.168.1.228"  # legion028 - node_exporter backup
+  
+  # Home automation extensions
+  - "192.168.1.229"  # legion029 - diyhue
+  - "192.168.1.231"  # legion031 - whodb
+  
+  # Media services
+  - "192.168.1.234"  # legion034 - kodi
+  - "192.168.1.235"  # legion035 - retro_pi
+  
+  # System management
+  - "192.168.1.236"  # legion036 - cockpit
+  - "192.168.1.237"  # legion037 - traefik
+  - "192.168.1.238"  # legion038 - authelia
+  - "192.168.1.240"  # legion040 - coolify
+
+# Resource-intensive services run on main server (alef)
+high_resource_services:
+  - "ollama"       # Requires significant RAM and CPU
+  - "mistral_rs"   # Heavy AI workloads
+  - "librechat"    # AI chat interface
+  - "openwebui"    # AI UI

@@ -1,0 +1,95 @@
+# Path configurations
+export PATH=$HOME/bin:/usr/local/bin:$PATH
+
+# Language and locale settings
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
+# Editor configuration
+export EDITOR='vim'
+export VISUAL='vim'
+
+# History configuration
+export HISTSIZE=10000
+export HISTFILESIZE=20000
+export HISTTIMEFORMAT="%d/%m/%y %T "
+
+# Development tool configurations
+{% if is_macos %}
+# Homebrew configurations
+export HOMEBREW_NO_ANALYTICS=1
+
+# Python configurations for macOS
+if [ -f "/Users/{{ ansible_user_id }}/miniconda3/etc/profile.d/conda.sh" ]; then
+    . "/Users/{{ ansible_user_id }}/miniconda3/etc/profile.d/conda.sh"
+else
+    export PATH="/Users/{{ ansible_user_id }}/miniconda3/bin:$PATH"
+fi
+{% else %}
+# Python configurations for Linux
+if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+    . "$HOME/miniconda3/etc/profile.d/conda.sh"
+else
+    export PATH="$HOME/miniconda3/bin:$PATH"
+fi
+{% endif %}
+
+# GitHub credentials
+export GITHUB_USERNAME='l3ocifer'
+
+# AWS Configuration
+export AWS_CLI_AUTO_PROMPT=on-partial
+export AWS_EC2_METADATA_DISABLED=true
+
+# Frontpage Configuration
+export FRONTPAGE_BUCKET='ursulai-frontpage'
+export FRONTPAGE_DISTRIBUTION='E3I691QR2OB5MU'
+export FRONTPAGE_URL='ursulai.com'
+
+# Development Tools
+export TF_LOG='INFO'
+
+{% if is_macos %}
+# macOS specific paths
+export PATH="/opt/homebrew/opt/gnu-getopt/bin:$PATH"
+export PATH="$PATH:/usr/local/sessionmanagerplugin/bin/"
+export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
+export CPPFLAGS="-I/opt/homebrew/opt/openjdk/include"
+export JAVA_HOME=$(/usr/libexec/java_home)
+{% else %}
+# Linux specific paths
+export PATH="$PATH:/usr/local/sessionmanagerplugin/bin/"
+{% if java_home is defined %}
+export JAVA_HOME="{{ java_home }}"
+{% endif %}
+{% endif %}
+
+# Bun Configuration
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# Local Binaries
+export PATH="$PATH:$HOME/.local/bin"
+
+# Golang Configuration
+export GOROOT=$(brew --prefix go)/libexec
+export GOPATH="$HOME/go"
+export PATH="$GOPATH/bin:$GOROOT/bin:$PATH"
+
+# TeX Configuration
+export PATH="$PATH:/Library/TeX/texbin"
+
+# Solana Configuration
+export PATH="/Users/leo/.local/share/solana/install/active_release/bin:$PATH"
+
+# LM Studio Configuration
+export PATH="$PATH:$HOME/.cache/lm-studio/bin"
+
+# Node Version Manager
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Custom environment variables from secrets
+{% for key, value in (secrets_env | default({})).items() %}
+export {{ key }}="{{ value }}"
+{% endfor %}

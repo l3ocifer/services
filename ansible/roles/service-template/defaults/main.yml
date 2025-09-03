@@ -1,0 +1,29 @@
+---
+# Service Configuration
+service_name: myservice
+service_user: "{{ service_name }}"
+service_group: "{{ service_name }}"
+service_description: "Service Description"
+
+# System Requirements
+min_ram_mb: 256
+min_cpu_cores: 1
+
+# Directories
+service_home: "/opt/{{ service_name }}"
+service_config_dir: "/etc/{{ service_name }}"
+service_data_dir: "/var/lib/{{ service_name }}"
+service_log_dir: "/var/log/{{ service_name }}"
+service_config_file: "{{ service_config_dir }}/config.yml"
+
+# Network Configuration
+service_host: "127.0.0.1"
+service_port: 8080
+service_health_check_enabled: true
+
+# Backup Configuration
+service_backup_enabled: false
+service_backup_config: ""
+
+# Dependencies
+service_packages: []

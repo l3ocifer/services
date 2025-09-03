@@ -1,0 +1,69 @@
+---
+# Verify essential directories and files
+- name: Verify essential directories exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: dir_check
+  loop:
+    - "~/.config/git"
+    - "~/.config/git/includes"
+    - "~/.config/personal"
+    - "~/.config/syncthing"
+    - "~/git"
+    - "~/.scripts"
+    - "~/.aws"
+  failed_when: not dir_check.stat.exists
+  tags: ['verify', 'directories']
+
+- name: Verify essential files exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: file_check
+  loop:
+    - "~/.config/git/includes/gitconfig-personal"
+    - "~/.config/git/includes/gitconfig-provisions"
+    - "~/.ssh/config"
+    - "~/.config/syncthing/config.xml"
+    - "~/.zshrc"
+    - "~/.aws/config"
+    - "~/.aws/credentials"
+  failed_when: not file_check.stat.exists
+  tags: ['verify', 'files']
+
+- name: Verify Syncthing is running
+  command: pgrep syncthing
+  register: syncthing_check
+  failed_when: syncthing_check.rc != 0
+  changed_when: false
+  tags: ['verify', 'sync']
+
+- name: Verify SSH agent is running
+  command: pgrep ssh-agent
+  register: ssh_agent_check
+  failed_when: ssh_agent_check.rc != 0
+  changed_when: false
+  tags: ['verify', 'ssh']
+
+- name: Verify Git configuration
+  command: git config --global --get user.email
+  register: git_config_check
+  failed_when: git_config_check.rc != 0
+  changed_when: false
+  tags: ['verify', 'git']
+
+- name: Verify Oh My Zsh installation
+  stat:
+    path: "{{ oh_my_zsh_dir }}"
+  register: omz_check
+  failed_when: not omz_check.stat.exists
+  tags: ['verify', 'shell']
+
+# Display verification results
+- name: Display verification summary
+  ansible.builtin.debug:
+    msg: |
+      Verification Results:
+      - Directories: {{ (dir_check.results | map(attribute='stat.exists') | list) is all }}
+      - Files: {{ (file_check.results | map(attribute='stat.exists') | list) is all }}
+      - Git Config Files Present: {{ file_check.results | selectattr('item', 'match', '.*gitconfig.*') | map(attribute='stat.exists') | list is all }}
+      - AWS Files Present: {{ file_check.results | selectattr('item', 'match', '.*aws.*') | map(attribute='stat.exists') | list is all }}

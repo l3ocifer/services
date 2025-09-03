@@ -1,0 +1,25 @@
+---
+# defaults file for roles/service-template
+
+# Default variables for service configuration
+
+# Service identity
+service_name: node_exporter
+service_user: "{{ service_name }}"
+service_group: "{{ service_name }}"
+
+# Directories
+service_home: "/opt/{{ service_name }}"
+service_config_dir: "/etc/{{ service_name }}"
+service_data_dir: "/var/lib/{{ service_name }}"
+service_log_dir: "/var/log/{{ service_name }}"
+
+# Configuration
+service_config_file: "{{ service_config_dir }}/config.yml"
+service_port: 8080
+service_host: "0.0.0.0"
+
+# System service configuration
+service_restart: "always"
+service_restart_sec: 5
+service_packages: []  # List your required packages here

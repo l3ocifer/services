@@ -1,0 +1,234 @@
+---
+# Rust Installation and Update
+- name: Check if Rust is installed
+  stat:
+    path: "{{ '~/.cargo/bin/rustc' | expanduser }}"
+  register: rust_check
+  tags: ['languages']
+  no_log: true
+
+- name: Install/Update Rust via rustup
+  block:
+    - name: Download rustup installer
+      get_url:
+        url: https://sh.rustup.rs
+        dest: /tmp/rustup.sh
+        mode: '0755'
+        force: yes
+      when: not rust_check.stat.exists
+
+    - name: Install Rust
+      shell: |
+        if ! command -v rustup &> /dev/null; then
+          /tmp/rustup.sh -y --no-modify-path
+          source "$HOME/.cargo/env"
+        else
+          rustup update
+        fi
+      args:
+        creates: "{{ '~/.cargo/bin/rustc' | expanduser }}"
+        executable: /bin/bash
+      register: rust_install
+      environment:
+        RUSTUP_INIT_SKIP_PATH_CHECK: "yes"
+
+    - name: Verify Rust installation
+      shell: |
+        source "$HOME/.cargo/env"
+        rustc --version
+      changed_when: false
+      register: rust_verify
+  rescue:
+    - name: Handle Rust installation failure
+      debug:
+        msg: "Failed to install Rust. Please check your internet connection and try again."
+      when: rust_install.failed is defined
+  tags: ['languages']
+
+# Python Setup via Miniconda
+- name: Check if Miniconda is installed
+  stat:
+    path: "{{ '~/miniconda3/bin/conda' | expanduser }}"
+  register: conda_check
+  tags: ['languages']
+  no_log: true
+
+- name: Install miniconda
+  block:
+    - name: Download miniconda installer
+      get_url:
+        url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-{{ 'MacOSX' if is_macos else 'Linux' }}-{{ 'arm64' if ansible_architecture == 'arm64' else 'x86_64' }}.sh"
+        dest: "/tmp/miniconda.sh"
+        mode: '0755'
+      when: not conda_check.stat.exists
+      tags: ['languages']
+
+    - name: Run miniconda installer
+      shell: "/tmp/miniconda.sh -b -p {{ '~/miniconda3' | expanduser }}"
+      args:
+        creates: "{{ '~/miniconda3/bin/conda' | expanduser }}"
+      when: not conda_check.stat.exists
+      tags: ['languages']
+
+    - name: Initialize conda
+      shell: |
+        source {{ '~/miniconda3/bin/activate' | expanduser }}
+        conda init zsh
+      args:
+        executable: /bin/zsh
+      when: not conda_check.stat.exists
+      tags: ['languages']
+
+# Node.js Setup
+- name: Check if nvm is installed
+  stat:
+    path: "{{ '~/.nvm/nvm.sh' | expanduser }}"
+  register: nvm_check
+  tags: ['languages']
+  no_log: true
+
+- name: Install nvm
+  shell: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+  args:
+    creates: "{{ '~/.nvm/nvm.sh' | expanduser }}"
+  when: not nvm_check.stat.exists
+  tags: ['languages']
+
+- name: Install Node.js via nvm
+  shell: |
+    export NVM_DIR="{{ '~/.nvm' | expanduser }}"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    nvm install --lts
+    nvm use --lts
+  args:
+    executable: /bin/bash
+  when: not nvm_check.stat.exists
+  tags: ['languages']
+
+# Ruby Setup
+- name: Setup Ruby
+  block:
+    - name: Install Ruby build dependencies on Linux
+      package:
+        name:
+          - rbenv
+          - libffi-dev
+          - libssl-dev
+          - libreadline-dev
+          - zlib1g-dev
+          - autoconf
+          - bison
+          - build-essential
+          - libyaml-dev
+          - libreadline6-dev
+          - libncurses5-dev
+          - libgdbm-dev
+        state: present
+      become: true
+      when: is_linux
+
+    - name: Install rbenv on macOS
+      homebrew:
+        name: rbenv
+        state: present
+      when: is_macos
+    
+    - name: Ensure rbenv plugins directory exists
+      file:
+        path: "{{ ansible_env.HOME }}/.rbenv/plugins"
+        state: directory
+        mode: '0755'
+
+    - name: Clone ruby-build plugin
+      git:
+        repo: https://github.com/rbenv/ruby-build.git
+        dest: "{{ ansible_env.HOME }}/.rbenv/plugins/ruby-build"
+        version: master
+        update: yes
+
+    - name: Initialize rbenv
+      shell: |
+        eval "$(rbenv init -)"
+      args:
+        executable: /bin/bash
+    
+    - name: Install Ruby version
+      shell: |
+        eval "$(rbenv init -)"
+        export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl@1.1 2>/dev/null || echo '/usr')"
+        rbenv install {{ languages.ruby.version | default('3.2.2') }} -s || rbenv install 3.2.2 -s
+        rbenv global {{ languages.ruby.version | default('3.2.2') }} || rbenv global 3.2.2
+      args:
+        executable: /bin/bash
+        creates: "{{ ansible_env.HOME }}/.rbenv/versions/{{ languages.ruby.version | default('3.2.2') }}"
+    
+    - name: Install Ruby gems
+      shell: |
+        eval "$(rbenv init -)"
+        gem install {{ languages.ruby.gems | default(['bundler', 'rails']) | join(' ') }}
+      args:
+        executable: /bin/bash
+  tags: ['languages']
+
+# Go Setup
+- name: Install Go
+  package:
+    name: golang
+    state: present
+  become: true
+  when: is_linux
+  tags: ['languages']
+
+- name: Set GOPATH
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: 'export GOPATH="{{ ansible_env.HOME }}/go"'
+    create: yes
+  tags: ['languages']
+
+# .NET SDK Setup
+- name: Install .NET SDK (macOS)
+  community.general.homebrew:
+    name: dotnet-sdk
+    state: present
+  when: is_macos
+  tags: ['languages']
+
+- name: Install .NET SDK (Linux)
+  block:
+    - name: Add Microsoft repository key
+      ansible.builtin.apt_key:
+        url: https://packages.microsoft.com/keys/microsoft.asc
+        state: present
+      when: is_linux
+      
+    - name: Add Microsoft package repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch={{ 'arm64' if ansible_architecture == 'arm64' else 'amd64' }}] https://packages.microsoft.com/repos/microsoft-{{ ansible_distribution | lower }}-{{ ansible_distribution_version }}-prod {{ ansible_distribution_release }} main"
+        state: present
+        filename: microsoft-prod
+      when: is_linux
+      
+    - name: Install .NET SDK
+      ansible.builtin.apt:
+        name: dotnet-sdk-{{ languages.dotnet.version }}
+        state: present
+        update_cache: yes
+      when: is_linux
+  when: is_linux
+  tags: ['languages']
+
+- name: Ensure .NET config directory exists
+  ansible.builtin.file:
+    path: "~/.config/dotnet"
+    state: directory
+    mode: '0755'
+  tags: ['languages']
+
+- name: Add .NET to PATH
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: 'export DOTNET_ROOT="{{ ansible_env.HOME }}/.dotnet"'
+    create: yes
+  tags: ['languages']

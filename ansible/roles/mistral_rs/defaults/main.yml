@@ -1,0 +1,36 @@
+---
+# Default variables for Mistral.rs configuration
+
+service_name: mistral_rs
+service_user: "{{ service_name }}"
+service_group: "{{ service_name }}"
+
+# Directories
+service_home: "/opt/{{ service_name }}"
+service_config_dir: "/etc/{{ service_name }}"
+service_data_dir: "/var/lib/{{ service_name }}"
+service_log_dir: "/var/log/{{ service_name }}"
+
+# Service configuration
+service_host: "0.0.0.0"
+service_port: 8000
+
+# Mistral specific settings
+mistral_model_path: "{{ service_data_dir }}/model"
+mistral_model_url: "https://huggingface.co/TheBloke/Mistral-7B-v0.1-GGUF/resolve/main/mistral-7b-v0.1.Q4_K_M.gguf"
+
+# Build configuration
+mistral_git_repo: "https://github.com/EricLBuehler/mistral.rs.git"
+mistral_version: "main"  # or specific commit/tag
+
+# System service configuration
+service_restart: "always"
+service_restart_sec: 5
+
+# Dependencies
+service_packages:
+  - git
+  - cargo
+  - build-essential
+  - pkg-config
+  - libssl-dev

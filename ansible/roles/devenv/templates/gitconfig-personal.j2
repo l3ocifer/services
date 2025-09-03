@@ -1,0 +1,20 @@
+[user]
+    name = {{ git_user_name }}
+    email = {{ git_user_email }}
+
+[core]
+    editor = {{ git_editor | default('vim') }}
+    autocrlf = input
+    longpaths = true
+
+[init]
+    defaultBranch = main
+
+[pull]
+    rebase = true
+
+[credential]
+    helper = {{ 'osxkeychain' if is_macos else 'cache --timeout=604800' }}
+
+[http]
+    postBuffer = 524288000 

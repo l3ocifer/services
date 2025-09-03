@@ -1,0 +1,31 @@
+---
+# Variables for medium-resource nodes
+
+# Resource Limits
+memory_limit: "2g"
+cpu_limit: "2"
+swap_size: "2g"
+
+# Service Configuration
+prometheus_retention_days: 15
+grafana_plugins_enabled: false
+
+# Storage Services
+syncthing_memory_limit: "512m"
+syncthing_cpu_limit: "1"
+
+# Development Tools
+rustdesk_enabled: true
+rustdesk_memory_limit: "512m"
+
+# Monitoring
+prometheus_storage_size: "20g"
+grafana_storage_size: "10g"
+loki_storage_size: "20g"
+
+# Backup Configuration
+backup_schedule: "0 3 * * *"  # 3 AM daily
+backup_retention:
+  daily: 7
+  weekly: 4
+  monthly: 6

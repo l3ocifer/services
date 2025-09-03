@@ -1,0 +1,67 @@
+---
+- name: Ensure SSH directory exists with correct permissions
+  file:
+    path: "{{ ssh_config_dir | expanduser }}"
+    state: directory
+    mode: '0700'
+  tags: ['ssh']
+
+- name: Copy SSH configuration
+  template:
+    src: ssh_config.j2
+    dest: "{{ ssh_config_dir | expanduser }}/config"
+    mode: '0600'
+    backup: yes
+  tags: ['ssh']
+
+- name: Check and add SSH keys
+  block:
+    - name: Check existing SSH keys
+      stat:
+        path: "{{ '~/.ssh/' ~ item.name | expanduser }}"
+      loop: "{{ ssh_keys | default([]) }}"
+      register: ssh_key_check
+      no_log: true
+
+    - name: Add SSH keys if missing
+      copy:
+        content: "{{ item.item.key }}"
+        dest: "{{ '~/.ssh/' ~ item.item.name | expanduser }}"
+        mode: "{{ item.item.mode | default('0600') }}"
+        force: false
+      loop: "{{ ssh_key_check.results }}"
+      when: not item.stat.exists
+      no_log: true
+  when: ssh_keys is defined
+  tags: ['ssh']
+
+- name: Configure SSH agent
+  block:
+    - name: Ensure SSH agent is running
+      shell: |
+        if ! pgrep -u $USER ssh-agent > /dev/null; then
+          eval $(ssh-agent -s)
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" > ~/.ssh/agent.env
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> ~/.ssh/agent.env
+        fi
+      args:
+        executable: /bin/bash
+        creates: ~/.ssh/agent.env
+      register: ssh_agent
+      changed_when: ssh_agent.rc == 0
+
+    - name: Add SSH keys to agent
+      shell: |
+        source ~/.ssh/agent.env
+        ssh-add -l | grep -q "{{ item.item.name }}" || ssh-add ~/.ssh/{{ item.item.name }}
+      args:
+        executable: /bin/bash
+      loop: "{{ ssh_key_check.results }}"
+      when: 
+        - ssh_keys is defined
+        - not item.stat.exists
+      register: ssh_add
+      changed_when: ssh_add.rc == 0
+      failed_when: false
+  when: ssh_keys is defined
+  tags: ['ssh']

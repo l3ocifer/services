@@ -1,0 +1,38 @@
+---
+# Variables for low-resource nodes
+
+# Resource Limits
+memory_limit: "512m"
+cpu_limit: "1"
+swap_size: "1g"
+
+# Service Configuration
+node_exporter_only: true
+prometheus_disabled: true
+grafana_disabled: true
+
+# Network Services
+traefik_memory_limit: "256m"
+traefik_cpu_limit: "0.5"
+
+# Security Services
+fail2ban_memory_limit: "128m"
+ufw_memory_limit: "128m"
+
+# DNS Services
+hickory_dns_memory_limit: "128m"
+hickory_dns_cpu_limit: "0.5"
+
+# Monitoring
+node_exporter_memory_limit: "64m"
+node_exporter_cpu_limit: "0.2"
+
+# Backup Configuration
+backup_schedule: "0 4 * * *"  # 4 AM daily
+backup_retention:
+  daily: 3
+  weekly: 2
+  monthly: 3
+
+# Update Configuration
+system_update_schedule: "0 5 * * 0"  # 5 AM on Sundays

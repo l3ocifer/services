@@ -1,0 +1,14 @@
+---
+users:
+  admin:
+    displayname: "Admin"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$cTNqVmlR$2Sd5ZcwqDoBASx5Enp0zptW6JJpYp4vlSsATlAgTNdU"
+    email: l3o@codeofconsciousness.com
+    groups:
+      - admins
+  user:
+    displayname: "Regular User"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$cTNqVmlR$2Sd5ZcwqDoBASx5Enp0zptW6JJpYp4vlSsATlAgTNdU"
+    email: user@codeofconsciousness.com
+    groups:
+      - users

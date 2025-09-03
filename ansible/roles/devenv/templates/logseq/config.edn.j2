@@ -1,0 +1,143 @@
+{
+ :meta/version 1
+
+ ;; Currently, we support either "Markdown" or "Org".
+ ;; This can overwrite your global preference so that
+ ;; maybe your personal preferred format is Org but you'd
+ ;; need to use Markdown for some projects.
+ :preferred-format "markdown"
+
+ ;; Preferred workflow style.
+ ;; Value is either ":now" for NOW/LATER style,
+ ;; or ":todo" for TODO/DOING style.
+ :preferred-workflow :now
+
+ ;; The app will ignore those directories or files.
+ ;; E.g. "/archived" "/test.md"
+ :hidden []
+
+ ;; When creating the new journal page, the app will use your template if there is one.
+ ;; You only need to input your template name here.
+ :default-templates
+ {:journals ""}
+
+ ;; Whether to enable hover on tooltip preview feature
+ ;; Default is true, you can also toggle this via setting page
+ :ui/enable-tooltip? true
+
+ ;; Enable Block timestamp
+ :feature/enable-block-timestamps? false
+
+ ;; Enable remove accents when searching.
+ :feature/enable-search-remove-accents? true
+
+ ;; Enable journals
+ :feature/enable-journals? true
+
+ ;; Enable flashcards
+ :feature/enable-flashcards? false
+
+ ;; Disable Built-in Scheduled and deadline Query
+ :feature/disable-scheduled-and-deadline-query? false
+
+ ;; Specify the date on which the week starts.
+ ;; Goes from 0 to 6 (Monday to Sunday).
+ :start-of-week 6
+
+ ;; Specify a custom CSS import
+ ;; This option take precedence over your local `logseq/custom.css` file
+ ;; You may find a list of awesome logseq themes here:
+ ;; https://github.com/logseq/awesome-logseq#css-themes
+ :custom-css-url ""
+
+ ;; Set Bullet indentation when exporting
+ ;; default option: tab
+ ;; Possible options are for `:sidebar` are
+ ;; 1. `:eight-spaces` as eight spaces
+ ;; 2. `:four-spaces` as four spaces
+ ;; 3. `:two-spaces` as two spaces
+ :export/bullet-indentation :tab
+
+ ;; When :all-pages-public? true, export repo would export all pages within that repo.
+ ;; Regardless of whether you've set any page to public or not.
+ :publishing/all-pages-public? false
+
+ ;; Specify default home page and sidebar status for Logseq
+ ;; If not specified, Logseq default opens journals page on startup
+ :default-home {:page "home", :sidebar "Contents"}
+
+ ;; Tell logseq to use a specific folder in the repo as a default location for notes
+ ;; if not specified, notes are stored in `pages` directory
+ :pages-directory "pages"
+
+ ;; Tell logseq to use a specific folder in the repo as a default location for journals
+ ;; if not specified, journals are stored in `journals` directory
+ :journals-directory "journals"
+
+ ;; If you prefer to use the file name as the page title
+ ;; instead of the first heading's title
+ ;; the only option for now is `file`
+ :page-name-order "file"
+
+ ;; Setup custom shortcuts
+ :shortcuts {}
+
+ ;; By default, pressing `Enter` in the document mode will create a new line.
+ ;; Set this to `true` so that it's the same behaviour as the usual outliner mode.
+ :shortcut/doc-mode-enter-for-new-block? false
+
+ ;; Whether to show command doc on hover
+ :ui/show-command-doc? true
+
+ ;; Whether to show empty bullets for non-document mode (the default mode)
+ :ui/show-empty-bullets? false
+
+ ;; The app will show those queries in today's journal page,
+ ;; the "NOW" query asks the tasks which need to be finished "now",
+ ;; the "NEXT" query asks the future tasks.
+ :default-queries
+ {:journals
+  [{:title "NOW"
+    :query [:find (pull ?h [*])
+            :in $ ?start ?today
+            :where
+            [?h :block/marker ?marker]
+            [(contains? #{"NOW" "DOING"} ?marker)]
+            [?h :block/page ?p]
+            [?p :block/journal? true]
+            [?p :block/journal-day ?d]
+            [(>= ?d ?start)]
+            [(<= ?d ?today)]]
+    :inputs [:14d :today]
+    :result-transform :sort-by-priority
+    :collapsed? false}
+   {:title "NEXT"
+    :query [:find (pull ?h [*])
+            :in $ ?start ?next
+            :where
+            [?h :block/marker ?marker]
+            [(contains? #{"NOW" "LATER" "TODO"} ?marker)]
+            [?h :block/ref-pages ?p]
+            [?p :block/journal? true]
+            [?p :block/journal-day ?d]
+            [(> ?d ?start)]
+            [(< ?d ?next)]]
+    :inputs [:today :7d-after]
+    :collapsed? false}]}
+
+ ;; Add your own commands to speedup.
+ :commands []
+
+ ;; By default, a block can only be collapsed if it has some children.
+ ;; `:outliner/block-title-collapse-enabled? true` enables a block with a title
+ ;; (multiple lines) can be collapsed too.
+ :outliner/block-title-collapse-enabled? false
+
+ ;; Macros replace texts and will make you more productive.
+ :macros {}
+
+ ;; The default level to be opened for the linked references.
+ :ref/default-open-blocks-level 2
+
+ :ref/linked-references-collapsed-threshold 50
+}

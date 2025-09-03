@@ -1,0 +1,39 @@
+---
+- name: Configure AWS
+  block:
+    - name: Ensure AWS config directory exists
+      file:
+        path: "~/.aws"
+        state: directory
+        mode: '0700'
+      register: aws_dir
+
+    - name: Create AWS config file
+      template:
+        src: aws_config.j2
+        dest: ~/.aws/config
+        mode: '0600'
+        backup: yes
+        validate: 'aws configure list-profiles --profile default > /dev/null'
+      when: aws_profiles is defined
+      register: aws_config
+
+    - name: Create AWS credentials file
+      template:
+        src: aws_credentials.j2
+        dest: ~/.aws/credentials
+        mode: '0600'
+        backup: yes
+      when: aws_credentials is defined
+      register: aws_creds
+
+    - name: Verify AWS configuration
+      command: aws configure list
+      changed_when: false
+      when: aws_config.changed or aws_creds.changed
+  rescue:
+    - name: Handle AWS configuration failure
+      debug:
+        msg: "Failed to configure AWS. Please check your credentials and try again."
+  when: aws_profiles is defined or aws_credentials is defined
+  tags: ['aws']

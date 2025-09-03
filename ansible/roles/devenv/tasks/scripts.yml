@@ -1,0 +1,75 @@
+---
+# Scripts directory setup and repository management
+- name: Setup scripts environment
+  block:
+    - name: Create scripts directory
+      file:
+        path: "{{ scripts_dir }}"
+        state: directory
+        mode: '0755'
+        recurse: yes
+      register: scripts_dir_create
+
+    - name: Check if scripts repo exists
+      stat:
+        path: "{{ scripts_dir }}/.git"
+      register: scripts_repo_check
+
+    - name: Clone scripts repository
+      git:
+        repo: "{{ repositories.scripts.repo }}"
+        dest: "{{ scripts_dir }}"
+        version: main
+        update: yes
+        force: no
+      when: not scripts_repo_check.stat.exists
+      register: scripts_repo_clone
+
+    - name: Set scripts permissions
+      file:
+        path: "{{ scripts_dir }}"
+        state: directory
+        mode: '0755'
+        recurse: yes
+      when: scripts_repo_clone.changed
+
+    - name: Ensure scripts directory is in PATH
+      lineinfile:
+        path: "~/.zshrc"
+        line: 'export PATH="{{ scripts_dir }}:$PATH"'
+        regexp: '^export PATH="{{ scripts_dir }}'
+        create: yes
+        mode: '0644'
+        backup: yes
+      register: path_update
+
+    - name: Verify scripts setup
+      block:
+        - name: Check directory permissions
+          stat:
+            path: "{{ scripts_dir }}"
+          register: scripts_check
+          failed_when: not scripts_check.stat.exists or scripts_check.stat.mode != '0755'
+
+        - name: Check repository status
+          command: git -C {{ scripts_dir }} status
+          changed_when: false
+          register: repo_check
+          failed_when: repo_check.rc != 0
+
+        - name: Verify PATH configuration
+          shell: |
+            source ~/.zshrc
+            echo $PATH | grep -q "{{ scripts_dir }}"
+          changed_when: false
+          register: path_check
+          failed_when: path_check.rc != 0
+  rescue:
+    - name: Handle scripts setup failure
+      debug:
+        msg: |
+          Failed to setup scripts environment. Please check:
+          - Git repository access
+          - Directory permissions
+          - PATH configuration
+  tags: ['scripts']

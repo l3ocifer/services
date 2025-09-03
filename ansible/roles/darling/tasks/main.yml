@@ -1,0 +1,84 @@
+---
+- name: Install Darling dependencies
+  become: true
+  apt:
+    name:
+      - cmake
+      - clang
+      - bison
+      - flex
+      - xz-utils
+      - libfuse-dev
+      - libudev-dev
+      - pkg-config
+      - libc6-dev-i386
+      - linux-headers-generic
+      - git
+      - libcairo2-dev
+      - libgl1-mesa-dev
+      - libtiff5-dev
+      - libfreetype6-dev
+      - libxml2-dev
+      - libegl1-mesa-dev
+      - libfontconfig1-dev
+      - libbsd-dev
+      - libxrandr-dev
+      - libxcursor-dev
+      - libgif-dev
+      - libavutil-dev
+      - libpulse-dev
+      - libavformat-dev
+      - libavcodec-dev
+      - libavresample-dev
+      - libdbus-1-dev
+    state: present
+    update_cache: yes
+
+- name: Clone Darling repository
+  git:
+    repo: https://github.com/darlinghq/darling.git
+    dest: "{{ ansible_env.HOME }}/darling"
+    version: master
+    depth: 1
+
+- name: Create build directory
+  file:
+    path: "{{ ansible_env.HOME }}/darling/build"
+    state: directory
+
+- name: Configure Darling build
+  command:
+    cmd: cmake ..
+    chdir: "{{ ansible_env.HOME }}/darling/build"
+    creates: "{{ ansible_env.HOME }}/darling/build/CMakeCache.txt"
+
+- name: Build Darling
+  command:
+    cmd: make -j$(nproc)
+    chdir: "{{ ansible_env.HOME }}/darling/build"
+
+- name: Install Darling
+  become: true
+  command:
+    cmd: make install
+    chdir: "{{ ansible_env.HOME }}/darling/build"
+
+- name: Load Darling kernel module
+  become: true
+  command: modprobe darling-mach
+  ignore_errors: yes  # Module might already be loaded
+
+- name: Add darling-mach module to load at boot
+  become: true
+  lineinfile:
+    path: /etc/modules-load.d/darling.conf
+    line: darling-mach
+    create: yes
+    mode: '0644'
+
+- name: Create Darling shell alias
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: 'alias darling="darling shell"'
+    create: yes
+    mode: '0644'

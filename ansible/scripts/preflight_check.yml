@@ -1,0 +1,141 @@
+---
+# Pre-flight checks for homelab deployment
+
+- name: Verify Raspberry Pi node requirements
+  hosts: raspberry_pi_nodes
+  gather_facts: true
+  tags: ["preflight", "raspi"]
+  tasks:
+    - name: Check minimum RAM requirements for Raspberry Pi
+      assert:
+        that:
+          - ansible_memtotal_mb >= 900  # Minimum 900MB RAM for RPi 3B
+        msg: "Insufficient RAM. Need at least 900MB, found {{ ansible_memtotal_mb }}MB"
+
+    - name: Check minimum disk space for Raspberry Pi
+      assert:
+        that:
+          - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | list | first >= 15000000000  # 15GB
+        msg: "Insufficient disk space. Need at least 15GB"
+
+    - name: Verify ARM architecture
+      assert:
+        that:
+          - ansible_architecture in ['armv7l', 'aarch64']
+        msg: "Unsupported CPU architecture for Raspberry Pi: {{ ansible_architecture }}"
+
+- name: Verify desktop node requirements
+  hosts: desktop_nodes
+  gather_facts: true
+  tags: ["preflight", "desktop"]
+  tasks:
+    - name: Check RAM for AI and media services
+      assert:
+        that:
+          - ansible_memtotal_mb >= 51200  # Minimum 50GB RAM for AI workloads
+        msg: "Insufficient RAM for AI services. Need at least 50GB, found {{ ansible_memtotal_mb }}MB"
+
+    - name: Check available storage
+      assert:
+        that:
+          - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | list | first >= 2000000000000  # 2TB
+        msg: "Insufficient storage space. Need at least 2TB for media and storage services"
+
+    - name: Verify x86_64 architecture
+      assert:
+        that:
+          - ansible_architecture == 'x86_64'
+        msg: "Desktop node must be x86_64 architecture"
+
+- name: Check existing services
+  hosts: all
+  gather_facts: false
+  tags: ["preflight", "services"]
+  tasks:
+    - name: Check core services availability
+      uri:
+        url: "{{ item.url }}"
+        return_content: yes
+      register: service_check
+      with_items:
+        - { name: "Traefik", url: "http://localhost:8080/api/version" }
+        - { name: "Coolify", url: "http://localhost:3000/api/v1/status" }
+        - { name: "Prometheus", url: "http://localhost:9090/-/healthy" }
+        - { name: "Grafana", url: "http://localhost:3000/api/health" }
+        - { name: "Hickory DNS", url: "http://localhost:8053/health" }
+        - { name: "Authelia", url: "http://localhost:9091/api/health" }
+        - { name: "Uptime Kuma", url: "http://localhost:3001/health" }
+      ignore_errors: yes
+      when: inventory_hostname in groups['service_leaders']
+
+    - name: Check media services
+      uri:
+        url: "{{ item.url }}"
+        return_content: yes
+      register: media_check
+      with_items:
+        - { name: "Jellyfin", url: "http://localhost:8096/health" }
+        - { name: "Kodi", url: "http://localhost:8080/jsonrpc" }
+      ignore_errors: yes
+      when: inventory_hostname in groups['media_nodes']
+
+    - name: Check AI services
+      uri:
+        url: "{{ item.url }}"
+        return_content: yes
+      register: ai_check
+      with_items:
+        - { name: "Ollama", url: "http://localhost:11434/api/health" }
+        - { name: "LibreChat", url: "http://localhost:3000/api/health" }
+        - { name: "OpenWebUI", url: "http://localhost:3000/health" }
+      ignore_errors: yes
+      when: inventory_hostname in groups['ai_nodes']
+
+    - name: Verify required ports
+      wait_for:
+        host: localhost
+        port: "{{ item }}"
+        timeout: 5
+      with_items:
+        - 80    # HTTP
+        - 443   # HTTPS
+        - 51820 # Wireguard
+        - 53    # DNS
+        - 22    # SSH
+        - 3478  # TURN/STUN
+        - 8443  # Guacamole
+      ignore_errors: yes
+
+    - name: Verify DNS resolution
+      command: dig +short {{ item }}
+      with_items:
+        - "{{ traefik_domain | default('traefik.local') }}"
+        - "{{ coolify_domain | default('coolify.local') }}"
+        - "{{ jellyfin_domain | default('media.local') }}"
+        - "{{ chat_domain | default('chat.local') }}"
+        - "{{ ai_domain | default('ai.local') }}"
+      changed_when: false
+      register: dns_check
+      ignore_errors: yes
+
+- name: Check network connectivity and AWS access
+  hosts: all
+  gather_facts: false
+  tags: ["preflight", "network"]
+  tasks:
+    - name: Check AWS Route53 API access
+      uri:
+        url: "https://route53.amazonaws.com/2013-04-01/hostedzone"
+        method: GET
+        headers:
+          Authorization: "AWS4-HMAC-SHA256 Credential={{ aws_access_key }}"
+      register: route53_check
+      ignore_errors: yes
+      when: inventory_hostname in groups['dns_managers']
+
+    - name: Check WireGuard interface
+      command: wg show
+      register: wg_check
+      ignore_errors: yes
+      changed_when: false
+      when: wireguard_enabled | default(true)

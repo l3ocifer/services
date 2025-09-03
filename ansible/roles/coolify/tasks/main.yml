@@ -1,0 +1,91 @@
+---
+# Tasks for Coolify installation and configuration
+
+- name: Ensure Docker is installed
+  ansible.builtin.package:
+    name: 
+      - docker.io
+      - docker-compose
+    state: present
+  become: true
+  tags: ['coolify']
+  
+- name: Ensure Docker is running and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: true
+  tags: ['coolify']
+
+- name: Add current user to Docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+  become: true
+  tags: ['coolify']
+
+- name: Create Coolify installation directory
+  ansible.builtin.file:
+    path: "{{ coolify_install_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+  become: true
+  tags: ['coolify']
+
+- name: Check if Coolify is already installed
+  ansible.builtin.stat:
+    path: "{{ coolify_install_dir }}/docker-compose.yml"
+  register: coolify_compose_file
+  tags: ['coolify']
+
+- name: Download and run Coolify installation script
+  ansible.builtin.shell: |
+    curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+  args:
+    chdir: "{{ coolify_install_dir }}"
+    creates: "{{ coolify_install_dir }}/docker-compose.yml"
+  when: not coolify_compose_file.stat.exists
+  tags: ['coolify']
+
+- name: Set Coolify firewall rules
+  ansible.builtin.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "3000"    # Coolify UI
+    - "8000"    # API port
+    - "9000"    # Application port range start
+    - "9001"    # Additional application port
+    - "9002"    # Additional application port
+    - "9003"    # Additional application port
+  become: true
+  when: ansible_os_family == "Debian"
+  tags: ['coolify']
+
+- name: Ensure Coolify is running
+  community.docker.docker_compose_v2:
+    project_src: "{{ coolify_install_dir }}"
+    state: present
+  become: true
+  tags: ['coolify']
+
+- name: Wait for Coolify to be available
+  ansible.builtin.uri:
+    url: "http://localhost:3000/api/v1/status"
+    status_code: 200
+    timeout: 5
+  register: coolify_health_check
+  retries: 12
+  delay: 10
+  until: coolify_health_check.status == 200
+  ignore_errors: yes
+  tags: ['coolify']
+
+# Include verification tasks
+- include_tasks: verify.yml
+  tags: ['coolify', 'verify']

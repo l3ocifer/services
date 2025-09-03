@@ -1,0 +1,11 @@
+[includeIf "gitdir:~/git/"]
+    path = ~/.config/git/includes/gitconfig-personal
+
+[includeIf "gitdir:~/.config/personal/"]
+    path = ~/.config/git/includes/gitconfig-personal
+
+[core]
+    sshCommand = ssh{% for key in ssh_keys | default([]) %} -i {{ '~/.ssh/' ~ key.name | expanduser }}{% endfor %}
+
+[url "git@github.com:"]
+    insteadOf = https://github.com/ 

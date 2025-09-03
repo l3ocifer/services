@@ -1,0 +1,24 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check if required directories exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dir_check
+      loop:
+        - "~/.config/git"
+        - "~/.config/git/includes"
+        - "~/.config/syncthing"
+        - "~/git"
+
+    - name: Verify directories exist
+      ansible.builtin.assert:
+        that:
+          - dir_check.results[0].stat.exists
+          - dir_check.results[1].stat.exists
+          - dir_check.results[2].stat.exists
+          - dir_check.results[3].stat.exists
+        fail_msg: "Required directories are missing"
+        success_msg: "All required directories exist"

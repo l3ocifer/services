@@ -1,0 +1,479 @@
+---
+# Ensure Homebrew is up to date
+- name: Update Homebrew
+  community.general.homebrew:
+    update_homebrew: yes
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
+  when: is_macos
+  tags: ['apps']
+
+# Install mas CLI
+- name: Install Mac App Store CLI
+  community.general.homebrew:
+    name: mas
+    state: present
+  when: is_macos
+  tags: ['mas']
+
+# Mac App Store
+- name: Check Mac App Store registration
+  ansible.builtin.command: mas list
+  register: mas_list
+  changed_when: false
+  check_mode: no
+  ignore_errors: yes
+  when: is_macos
+  tags: ['mas']
+
+- name: Check if Mac App Store apps exist
+  ansible.builtin.stat:
+    path: "/Applications/{{ item.name }}.app"
+  loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list }}"
+  register: mas_app_check
+  when: is_macos
+  tags: ['mas']
+
+- name: Install Mac App Store applications
+  block:
+    - name: Install app from MAS
+      community.general.mas:
+        id: "{{ item.0.id }}"
+        state: present
+      loop: "{{ macos_mas_apps | selectattr('id', 'defined') | list | zip(mas_app_check.results) | list }}"
+      when: not item.1.stat.exists and mas_list.rc == 0
+      register: mas_installation
+  rescue:
+    - name: Handle MAS installation failure
+      debug:
+        msg: "Failed to install {{ item.item.0.name }}. Please ensure you're signed into the App Store."
+      when: mas_installation.failed is defined
+  when: is_macos
+  tags: ['mas']
+
+# Desktop Applications
+- name: Check desktop applications (macOS)
+  ansible.builtin.stat:
+    path: "/Applications/{{ item.name }}.app"
+  loop: "{{ desktop_apps | selectattr('brew', 'defined') | list }}"
+  register: app_check
+  loop_control:
+    label: "{{ item.name }}"
+  when: is_macos
+  tags: ['apps']
+
+- name: Install desktop applications via Homebrew (macOS)
+  community.general.homebrew_cask:
+    name: "{{ item.item.brew }}"
+    state: present
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
+  loop: "{{ app_check.results }}"
+  when: is_macos and not item.stat.exists
+  register: brew_install
+  tags: ['apps']
+
+# Linux/WSL Applications
+- name: Install prerequisites for repositories
+  package:
+    name:
+      - apt-transport-https
+      - curl
+      - software-properties-common
+    state: present
+  become: true
+  when: is_linux or is_wsl
+  tags: ['apps']
+
+- name: Add Brave Browser GPG key
+  get_url:
+    url: https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg
+    dest: /usr/share/keyrings/brave-browser-archive-keyring.gpg
+    mode: '0644'
+  become: true
+  when: is_linux or is_wsl
+  tags: ['apps']
+
+- name: Add Brave Browser repository
+  apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg] https://brave-browser-apt-release.s3.brave.com/ stable main"
+    state: present
+    filename: brave-browser-release
+  become: true
+  when: is_linux or is_wsl
+  tags: ['apps']
+
+- name: Add apt repositories (Linux/WSL)
+  apt_repository:
+    repo: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop: "{{ linux_repositories }}"
+  become: true
+  when: is_linux or is_wsl
+  tags: ['apps']
+
+- name: Install Linux desktop applications
+  package:
+    name: "{{ desktop_apps | selectattr('package', 'defined') | rejectattr('macos_only', 'defined') | map(attribute='package') | list }}"
+    state: present
+  become: true
+  when: (is_linux and not is_wsl) or (is_wsl and item.wsl_compatible | default(false))
+  register: apt_install
+  tags: ['apps']
+
+- name: Display Homebrew status
+  ansible.builtin.debug:
+    msg: "App: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
+  loop: "{{ brew_install.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  when: is_macos
+  tags: ['apps']
+
+- name: Display apt status
+  ansible.builtin.debug:
+    msg: "Package installation status: {{ 'installed' if apt_install.changed else 'exists' }}"
+  when: is_linux or is_wsl
+  tags: ['apps']
+
+# CLI Development Tools
+- name: Get list of installed CLI tools
+  shell: "which {{ item.name }}"
+  loop: "{{ cli_dev_tools }}"
+  register: cli_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+  tags: ['apps']
+
+- name: Install CLI tools (Linux)
+  package:
+    name: "{{ item.item.name }}"
+    state: present
+  become: true
+  loop: "{{ cli_check.results }}"
+  when: 
+    - item.rc != 0 
+    - is_linux
+    - not item.item.macos_only | default(false)
+  register: cli_install_linux
+  tags: ['apps']
+
+- name: Install CLI tools (macOS)
+  community.general.homebrew:
+    name: "{{ item.item.name }}"
+    state: present
+  loop: "{{ cli_check.results }}"
+  when: item.rc != 0 and is_macos
+  register: cli_install_macos
+  tags: ['apps']
+
+- name: Display CLI tool status (Linux)
+  ansible.builtin.debug:
+    msg: "CLI: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
+  loop: "{{ cli_install_linux.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  when: is_linux
+  tags: ['apps']
+
+- name: Display CLI tool status (macOS)
+  ansible.builtin.debug:
+    msg: "CLI: {{ item.item.item.name }} - {{ 'installed' if item.changed else 'exists' }}"
+  loop: "{{ cli_install_macos.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  when: is_macos
+  tags: ['apps']
+
+# Config Directories and Files
+- name: Ensure parent config directory exists
+  ansible.builtin.file:
+    path: "~/.config/personal"
+    state: directory
+    mode: '0755'
+  tags: ['config']
+
+- name: Ensure application config directories exist
+  ansible.builtin.file:
+    path: "{{ item | dirname }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ config_symlinks | map(attribute='src') | map('expanduser') | list }}"
+  tags: ['config']
+
+- name: Create default config files if missing
+  ansible.builtin.copy:
+    content: "{}\n"
+    dest: "{{ item.src | expanduser }}"
+    force: false
+    mode: '0644'
+  loop: "{{ config_symlinks }}"
+  tags: ['config']
+
+- name: Ensure target config directories exist
+  ansible.builtin.file:
+    path: "{{ item | dirname }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ config_symlinks | map(attribute='dest') | map('expanduser') | list }}"
+  tags: ['config']
+
+- name: Create application config symlinks
+  ansible.builtin.file:
+    src: "{{ item.src | expanduser }}"
+    dest: "{{ item.dest | expanduser }}"
+    state: link
+    force: true
+  loop: "{{ config_symlinks }}"
+  tags: ['config']
+
+# CLI Tools Installation
+- name: Check if CLI tools are installed
+  command: "brew list --formula {{ item.name }}"
+  register: cli_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+  loop: "{{ cli_tools }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: is_macos
+  tags: ['cli']
+
+- name: Install CLI tools via Homebrew
+  community.general.homebrew:
+    name: "{{ item.item.packages }}"
+    state: present
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
+  loop: "{{ cli_check.results }}"
+  when: is_macos and item.rc != 0 and not ansible_check_mode
+  loop_control:
+    label: "{{ item.item.name }}"
+  tags: ['cli']
+
+# Docker installation for Linux
+- name: Check if Docker is installed
+  shell: "docker --version || true"
+  register: docker_check
+  changed_when: false
+  when: is_linux
+  tags: ['apps']
+
+- name: Install Docker on Linux
+  block:
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      
+    - name: Add Docker repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        state: present
+        
+    - name: Install Docker packages
+      apt:
+        name: 
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+  when: is_linux and docker_check.rc != 0
+  become: true
+  tags: ['apps']
+
+# Ensure proper permissions for Docker socket
+- name: Ensure Docker socket permissions
+  file:
+    path: /var/run/docker.sock
+    mode: '0666'
+  become: true
+  when: is_macos
+  ignore_errors: yes
+  tags: ['apps']
+
+# Configure Colima (Docker alternative)
+- name: Check Colima status
+  shell: "colima status || true"
+  register: colima_check
+  changed_when: false
+  when: is_macos
+  tags: ['apps']
+
+- name: Configure Colima
+  shell: |
+    colima stop || true
+    colima start --cpu 4 --memory 8 --disk 100
+  when: is_macos and colima_check.rc != 0
+  changed_when: false
+  tags: ['apps']
+
+# Post-installation checks
+- name: Verify installations
+  shell: "{{ item }}"
+  register: check_result
+  changed_when: false
+  failed_when: false
+  with_items:
+    - "docker --version"
+    - "colima status"
+    - "podman --version"
+    - "zed --version"
+    - "cursor --version"
+    - "vlc --version"
+  when: is_macos
+  tags: ['apps']
+
+- name: Display installation results
+  debug:
+    var: check_result
+  when: is_macos
+  tags: ['apps']
+
+# WSL specific setup
+- name: Configure WSL specific tools
+  block:
+    - name: Install WSL tools
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - wslu  # WSL utilities
+  when: is_wsl
+  become: true
+  tags: ['wsl']
+
+# Python Tools
+- name: Install pipx on Linux
+  package:
+    name: pipx
+    state: present
+  become: true
+  when: is_linux
+  tags: ['python']
+
+- name: Ensure pipx path exists
+  ansible.builtin.file:
+    path: "~/.local/bin"
+    state: directory
+    mode: '0755'
+  when: is_linux
+  tags: ['python']
+
+- name: Install Python tools via pipx (Linux)
+  shell: "pipx install {{ item }}"
+  loop: "{{ python_tools }}"
+  register: pipx_install
+  when: is_linux
+  changed_when: "'installed package' in pipx_install.stderr or 'installed package' in pipx_install.stdout"
+  failed_when: false
+  tags: ['python']
+
+- name: Install Python tools via pip (macOS)
+  pip:
+    name: "{{ item }}"
+    state: present
+    extra_args: --user
+  loop: "{{ python_tools }}"
+  when: is_macos
+  tags: ['python']
+
+# Shell tools for non-MacOS
+- name: Install shell tools on Linux
+  block:
+    - name: Install Starship
+      shell: curl -sS https://starship.rs/install.sh | sh -s -- -y
+      
+    - name: Install Zoxide
+      shell: curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+      
+    - name: Install Atuin
+      shell: bash <(curl https://raw.githubusercontent.com/atuinsh/atuin/main/install.sh)
+      
+    - name: Install Bun
+      shell: curl -fsSL https://bun.sh/install | bash
+  when: not is_macos
+  tags: ['shell']
+
+# Security Tools
+- name: Install security tools (Linux)
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - gpg  # For encryption
+    - pass  # Password manager
+    - age  # Modern encryption tool
+  become: true
+  when: not is_macos
+  loop_control:
+    label: "{{ item }}"
+  tags: ['security']
+
+- name: Install security tools (MacOS)
+  community.general.homebrew:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - gnupg
+    - pass
+    - age
+  when: is_macos
+  loop_control:
+    label: "{{ item }}"
+  tags: ['security']
+
+# AI Tools Configuration
+- name: Ensure Ollama service is running
+  shell: "pgrep ollama || (nohup ollama serve > /dev/null 2>&1 & sleep 2)"
+  register: ollama_service
+  changed_when: ollama_service.rc == 0
+  when: is_macos
+  tags: ['ai']
+
+- name: Ensure aichat config directory exists
+  ansible.builtin.file:
+    path: "~/.config/aichat"
+    state: directory
+    mode: '0755'
+  tags: ['ai']
+
+- name: Configure aichat
+  ansible.builtin.template:
+    src: "aichat.yaml.j2"
+    dest: "~/.config/aichat/config.yaml"
+    mode: '0644'
+  tags: ['ai']
+
+- name: Check if {{ ai_model_name }} model exists
+  shell: "ollama list | grep {{ ai_model_name }}"
+  register: model_check
+  changed_when: false
+  failed_when: false
+  when: is_macos
+  tags: ['ai']
+
+- name: Pull {{ ai_model_name }} model for ollama
+  shell: "ollama pull {{ ai_model_name }}"
+  register: ollama_pull
+  changed_when: ollama_pull.rc == 0
+  when: is_macos and model_check.rc != 0
+  tags: ['ai']
+
+# Fix Vagrant timeout in Starship
+- name: Configure Starship timeout
+  ansible.builtin.lineinfile:
+    path: "~/.config/starship.toml"
+    line: 'command_timeout = 5000'
+    create: yes
+    mode: '0644'
+  tags: ['apps']

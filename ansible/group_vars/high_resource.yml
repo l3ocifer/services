@@ -1,0 +1,38 @@
+---
+# Variables for high-resource nodes
+
+# Resource Limits
+memory_limit: "4g"
+cpu_limit: "4"
+swap_size: "4g"
+
+# Service Configuration
+prometheus_retention_days: 30
+grafana_plugins_enabled: true
+
+# AI Services Configuration
+ollama_models:
+  - "mistral"
+  - "codellama"
+  - "llama2"
+ollama_memory_limit: "3g"
+
+# Video Services
+jitsi_memory_limit: "2g"
+jitsi_cpu_limit: "2"
+
+# Development Tools
+coolify_enabled: true
+coolify_memory_limit: "2g"
+
+# Monitoring
+prometheus_storage_size: "50g"
+grafana_storage_size: "20g"
+loki_storage_size: "50g"
+
+# Backup Configuration
+backup_schedule: "0 2 * * *"  # 2 AM daily
+backup_retention:
+  daily: 14
+  weekly: 8
+  monthly: 12

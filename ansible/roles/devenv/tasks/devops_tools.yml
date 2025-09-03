@@ -1,0 +1,43 @@
+---
+# Check CLI tools
+- name: Check if CLI tools are installed
+  command: "brew list --formula {{ item.name }}"
+  register: cli_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+  loop: "{{ cli_tools }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: ['devops']
+
+- name: Install CLI tools
+  community.general.homebrew:
+    name: "{{ item.item.packages | difference(['vault', 'packer']) }}"
+    state: present
+  environment:
+    HOMEBREW_NO_AUTO_UPDATE: 1
+    HOMEBREW_NO_INSTALL_CLEANUP: 1
+    HOMEBREW_NO_ENV_HINTS: 1
+  loop: "{{ cli_check.results }}"
+  when: is_macos and item.rc != 0 and not ansible_check_mode
+  loop_control:
+    label: "{{ item.item.name }}"
+  tags: ['devops']
+
+- name: Install HashiCorp tools from official tap
+  block:
+    - name: Add HashiCorp tap
+      community.general.homebrew_tap:
+        name: hashicorp/tap
+        state: present
+      when: is_macos
+
+    - name: Install HashiCorp tools
+      community.general.homebrew:
+        name: 
+          - hashicorp/tap/vault
+          - hashicorp/tap/packer
+        state: present
+      when: is_macos
+  tags: ['devops']

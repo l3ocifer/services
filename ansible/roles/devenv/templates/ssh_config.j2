@@ -1,0 +1,28 @@
+Host *
+    AddKeysToAgent yes
+{% if is_macos %}
+    UseKeychain yes
+    IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+{% endif %}
+
+# GitHub
+Host github.com
+    User git
+    IdentityFile ~/.ssh/leo-github
+
+# Default settings for all hosts (including GitHub)
+Host *
+    IdentityFile ~/.ssh/leo-personal
+{% for key in ssh_keys | default([]) %}
+{% if key.name != 'leo-personal' %}
+    IdentityFile ~/.ssh/{{ key.name }}
+{% endif %}
+{% endfor %}
+    ServerAliveInterval 60
+    ServerAliveCountMax 30
+    StrictHostKeyChecking ask
+    VerifyHostKeyDNS yes
+    ForwardAgent no
+    ControlMaster auto
+    ControlPath ~/.ssh/control-%h-%p-%r
+    ControlPersist 600
