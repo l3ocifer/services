@@ -1,4 +1,4 @@
-# Homelab Services
+# Homelab Service
 
 A comprehensive homelab services repository offering both **Ansible-based local deployment** and **Docker containerized deployment** options for managing your entire homelab environment.
 
