@@ -223,7 +223,7 @@ To test the Matrix and Authelia setup with local access:
    ```bash
    ./generate-env.sh [your-domain]
    ```
-   If you don't specify a domain, it will use the default `codeofconsciousness.com`.
+   If you don't specify a domain, it will use the default `leopaska.com`.
 
 2. Start only the required services:
    ```bash

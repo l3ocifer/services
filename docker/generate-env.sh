@@ -3,8 +3,8 @@
 # Script to generate a .env file for testing
 
 # Set default values
-DEFAULT_DOMAIN="codeofconsciousness.com"
-DEFAULT_DOMAIN_BASE="codeofconsciousness"
+DEFAULT_DOMAIN="leopaska.com"
+DEFAULT_DOMAIN_BASE="leopaska"
 DEFAULT_REDIS_PASSWORD="redisstrongpassword123"
 DEFAULT_POSTGRES_PASSWORD="postgresstrongpassword123"
 

@@ -71,7 +71,7 @@ services:
       - homeassistant_config:/config
       - /etc/localtime:/etc/localtime:ro
     ports:
-      - "3010:8123"
+      - "8123:8123"
     environment:
       - TZ=${TZ:-UTC}
     healthcheck:
@@ -157,9 +157,9 @@ services:
     volumes:
       - webui_data:/app/backend/data
     ports:
-      - "11333:8080"
+      - "3333:8080"
     environment:
-      - OLLAMA_API_BASE_URL=http://108.51.59.178:11434/api
+      - OLLAMA_API_BASE_URL=http://192.168.1.200:11434/api
       - OLLAMA_BASE_URL=http://ollama:11434
       - WEBUI_AUTH=authelia
       - WEBUI_AUTH_AUTHELIA_URL=https://auth.${DOMAIN}
@@ -357,7 +357,7 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
     ports:
-      - "7090:9090"
+      - "9090:9090"
     depends_on:
       - node-exporter
       - traefik
@@ -458,7 +458,7 @@ services:
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     ports:
-      - "7100:3100"
+      - "3100:3100"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
       interval: 10s
@@ -834,7 +834,7 @@ services:
       - /sys:/host/sys:ro
       - /:/rootfs:ro
     ports:
-      - "7101:9100"
+      - "9100:9100"
     command:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
@@ -870,10 +870,10 @@ services:
     volumes:
       - rustdesk_data:/root
     ports:
-      - "6115:21115"
-      - "6116:21116"
-      - "6116:21116/udp" 
-      - "6118:21118"
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp" 
+      - "21118:21118"
     command: hbbs -r rustdesk-hbbr-${DOMAIN_BASE}:21117
     networks:
       - llm_network
@@ -904,8 +904,8 @@ services:
     volumes:
       - rustdesk_data:/root
     ports:
-      - "${RUSTDESK_RELAY_PORT:-6117}:21117"
-      - "6119:21119"
+      - "${RUSTDESK_RELAY_PORT:-21117}:21117"
+      - "21119:21119"
     command: hbbr
     networks:
       - llm_network
@@ -937,7 +937,7 @@ services:
     volumes:
       - syncthing_data:/var/syncthing
     ports:
-      - "6834:8384"
+      - "8384:8384"
       - "22000:22000"
       - "22000:22000/udp"
       - "21027:21027/udp"
@@ -1084,7 +1084,7 @@ services:
     container_name: huginn-${DOMAIN_BASE}
     restart: unless-stopped
     ports:
-      - "3011:3000"
+      - "3010:3000"
     environment:
       - DOMAIN=${DOMAIN:-localhost:3010}
       - PORT=3000
@@ -1165,7 +1165,7 @@ services:
              sed -i \"s/matrix\.localhost/matrix.${LOCAL_DOMAIN:-localhost}/g\" /app/config.json && 
              nginx -g 'daemon off;'"
     ports:
-      - "6099:80"
+      - "8099:80"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
       interval: 30s
@@ -1193,9 +1193,9 @@ services:
     container_name: whodb-${DOMAIN_BASE}
     restart: unless-stopped
     ports:
-      - "5005:8080"
+      - "8082:8080"
     environment:
-      - WHODB_OLLAMA_HOST=${OLLAMA_HOST:-108.51.59.178}
+      - WHODB_OLLAMA_HOST=${OLLAMA_HOST:-192.168.1.200}
       - WHODB_OLLAMA_PORT=${OLLAMA_PORT:-11434}
       - WHODB_PG_HOST=neon-postgres
       - WHODB_PG_PORT=5432
@@ -1234,521 +1234,6 @@ services:
       - "traefik.http.routers.whodb-local.entrypoints=web"
       - "traefik.http.services.whodb-local.loadbalancer.server.port=8080"
       - "traefik.http.routers.whodb-local.middlewares=local-only@file,security@file"
-
-  # ================================================================
-  # PRODUCTION PROJECT SERVICES
-  # ================================================================
-
-  # LocalStack for AWS service emulation
-  localstack:
-    image: localstack/localstack:3.0
-    container_name: localstack-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "4566:4566"            # LocalStack Gateway
-      - "4510-4559:4510-4559"  # External services port range
-    environment:
-      - DEBUG=${DEBUG:-0}
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - SERVICES=lambda,s3,sqs,dynamodb,apigateway,cloudformation,sts,iam,events,logs,cognito-idp,kinesis,elasticache,secretsmanager,ssm
-      - LAMBDA_EXECUTOR=docker
-      - LAMBDA_REMOTE_DOCKER=0
-      - AWS_DEFAULT_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-      - PERSISTENCE=1
-      - DATA_DIR=/tmp/localstack/data
-    volumes:
-      - localstack_data:/tmp/localstack
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2'
-        reservations:
-          memory: '1G'
-          cpus: '0.5'
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.localstack.rule=Host(`aws.${DOMAIN}`)"
-      - "traefik.http.routers.localstack.entrypoints=websecure"
-      - "traefik.http.routers.localstack.tls.certresolver=letsencrypt"
-      - "traefik.http.services.localstack.loadbalancer.server.port=4566"
-      - "traefik.http.routers.localstack.service=localstack"
-      - "traefik.http.routers.localstack.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.localstack-local.rule=HostRegexp(`{host:(aws.localhost|aws.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.localstack-local.entrypoints=web"
-      - "traefik.http.services.localstack-local.loadbalancer.server.port=4566"
-      - "traefik.http.routers.localstack-local.middlewares=local-only@file,security@file"
-
-  # Elasticsearch for search functionality
-  elasticsearch:
-    image: elasticsearch:8.11.3
-    container_name: elasticsearch-${DOMAIN_BASE}
-    restart: unless-stopped
-    environment:
-      - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms2g -Xmx2g
-      - xpack.security.enabled=false
-      - xpack.security.enrollment.enabled=false
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2'
-        reservations:
-          memory: '2G'
-          cpus: '1'
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.elasticsearch.rule=Host(`search.${DOMAIN}`)"
-      - "traefik.http.routers.elasticsearch.entrypoints=websecure"
-      - "traefik.http.routers.elasticsearch.tls.certresolver=letsencrypt"
-      - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
-      - "traefik.http.routers.elasticsearch.service=elasticsearch"
-      - "traefik.http.routers.elasticsearch.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.elasticsearch-local.rule=HostRegexp(`{host:(search.localhost|search.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.elasticsearch-local.entrypoints=web"
-      - "traefik.http.services.elasticsearch-local.loadbalancer.server.port=9200"
-      - "traefik.http.routers.elasticsearch-local.middlewares=local-only@file,security@file"
-
-  # ClickHouse for analytics
-  clickhouse:
-    image: clickhouse/clickhouse-server:24.1
-    container_name: clickhouse-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "8123:8123"
-      - "9000:9000"
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
-    environment:
-      - CLICKHOUSE_DB=analytics
-      - CLICKHOUSE_USER=default
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-clickhouse_password}
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2'
-        reservations:
-          memory: '1G'
-          cpus: '0.5'
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.clickhouse.rule=Host(`analytics.${DOMAIN}`)"
-      - "traefik.http.routers.clickhouse.entrypoints=websecure"
-      - "traefik.http.routers.clickhouse.tls.certresolver=letsencrypt"
-      - "traefik.http.services.clickhouse.loadbalancer.server.port=8123"
-      - "traefik.http.routers.clickhouse.service=clickhouse"
-      - "traefik.http.routers.clickhouse.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.clickhouse-local.rule=HostRegexp(`{host:(analytics.localhost|analytics.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.clickhouse-local.entrypoints=web"
-      - "traefik.http.services.clickhouse-local.loadbalancer.server.port=8123"
-      - "traefik.http.routers.clickhouse-local.middlewares=local-only@file,security@file"
-
-  # RabbitMQ for message queuing
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: rabbitmq-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-admin}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-admin_password}
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1'
-        reservations:
-          memory: '512M'
-          cpus: '0.2'
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.rabbitmq.rule=Host(`queue.${DOMAIN}`)"
-      - "traefik.http.routers.rabbitmq.entrypoints=websecure"
-      - "traefik.http.routers.rabbitmq.tls.certresolver=letsencrypt"
-      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
-      - "traefik.http.routers.rabbitmq.service=rabbitmq"
-      - "traefik.http.routers.rabbitmq.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.rabbitmq-local.rule=HostRegexp(`{host:(queue.localhost|queue.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.rabbitmq-local.entrypoints=web"
-      - "traefik.http.services.rabbitmq-local.loadbalancer.server.port=15672"
-      - "traefik.http.routers.rabbitmq-local.middlewares=local-only@file,security@file"
-
-  # RTMP Server for live streaming
-  rtmp-server:
-    image: tiangolo/nginx-rtmp
-    container_name: rtmp-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "1935:1935"  # RTMP ingest
-      - "8085:80"    # HLS playback
-    volumes:
-      - rtmp_data:/tmp/hls
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.rtmp.rule=Host(`stream.${DOMAIN}`)"
-      - "traefik.http.routers.rtmp.entrypoints=websecure"
-      - "traefik.http.routers.rtmp.tls.certresolver=letsencrypt"
-      - "traefik.http.services.rtmp.loadbalancer.server.port=80"
-      - "traefik.http.routers.rtmp.service=rtmp"
-      - "traefik.http.routers.rtmp.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.rtmp-local.rule=HostRegexp(`{host:(stream.localhost|stream.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.rtmp-local.entrypoints=web"
-      - "traefik.http.services.rtmp-local.loadbalancer.server.port=80"
-      - "traefik.http.routers.rtmp-local.middlewares=local-only@file,security@file"
-
-  # MailHog for email testing
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: mailhog-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "1025:1025"  # SMTP
-      - "8025:8025"  # Web UI
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.mailhog.rule=Host(`mail.${DOMAIN}`)"
-      - "traefik.http.routers.mailhog.entrypoints=websecure"
-      - "traefik.http.routers.mailhog.tls.certresolver=letsencrypt"
-      - "traefik.http.services.mailhog.loadbalancer.server.port=8025"
-      - "traefik.http.routers.mailhog.service=mailhog"
-      - "traefik.http.routers.mailhog.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.mailhog-local.rule=HostRegexp(`{host:(mail.localhost|mail.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.mailhog-local.entrypoints=web"
-      - "traefik.http.services.mailhog-local.loadbalancer.server.port=8025"
-      - "traefik.http.routers.mailhog-local.middlewares=local-only@file,security@file"
-
-  # Adminer for database administration
-  adminer:
-    image: adminer:latest
-    container_name: adminer-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "8084:8080"
-    environment:
-      - ADMINER_DEFAULT_SERVER=neon-postgres
-      - ADMINER_DESIGN=pepa-linha
-    depends_on:
-      neon-postgres:
-        condition: service_healthy
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.adminer.rule=Host(`admin.${DOMAIN}`)"
-      - "traefik.http.routers.adminer.entrypoints=websecure"
-      - "traefik.http.routers.adminer.tls.certresolver=letsencrypt"
-      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
-      - "traefik.http.routers.adminer.service=adminer"
-      - "traefik.http.routers.adminer.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.adminer-local.rule=HostRegexp(`{host:(admin.localhost|admin.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.adminer-local.entrypoints=web"
-      - "traefik.http.services.adminer-local.loadbalancer.server.port=8080"
-      - "traefik.http.routers.adminer-local.middlewares=local-only@file,security@file"
-
-  # Redis Commander for Redis administration
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: redis-commander-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "8085:8081"
-    environment:
-      - REDIS_HOSTS=local:redis-nd-${DOMAIN_BASE}:6379:0:${REDIS_PASSWORD}
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.redis-commander.rule=Host(`redis-admin.${DOMAIN}`)"
-      - "traefik.http.routers.redis-commander.entrypoints=websecure"
-      - "traefik.http.routers.redis-commander.tls.certresolver=letsencrypt"
-      - "traefik.http.services.redis-commander.loadbalancer.server.port=8081"
-      - "traefik.http.routers.redis-commander.service=redis-commander"
-      - "traefik.http.routers.redis-commander.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.redis-commander-local.rule=HostRegexp(`{host:(redis-admin.localhost|redis-admin.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.redis-commander-local.entrypoints=web"
-      - "traefik.http.services.redis-commander-local.loadbalancer.server.port=8081"
-      - "traefik.http.routers.redis-commander-local.middlewares=local-only@file,security@file"
-
-  # PgAdmin for PostgreSQL administration
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "8086:80"
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@homelab.local}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin_password}
-      - PGADMIN_LISTEN_PORT=80
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      neon-postgres:
-        condition: service_healthy
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.${DOMAIN}`)"
-      - "traefik.http.routers.pgadmin.entrypoints=websecure"
-      - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
-      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
-      - "traefik.http.routers.pgadmin.service=pgadmin"
-      - "traefik.http.routers.pgadmin.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.pgadmin-local.rule=HostRegexp(`{host:(pgadmin.localhost|pgadmin.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.pgadmin-local.entrypoints=web"
-      - "traefik.http.services.pgadmin-local.loadbalancer.server.port=80"
-      - "traefik.http.routers.pgadmin-local.middlewares=local-only@file,security@file"
-
-  # ================================================================
-  # ADDITIONAL SERVICES FROM ANSIBLE PLAYBOOK
-  # ================================================================
-
-  # Jellyfin Media Server
-  jellyfin:
-    image: jellyfin/jellyfin:latest
-    container_name: jellyfin-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "8096:8096"
-    volumes:
-      - jellyfin_data:/config
-      - ${DATA_DIR:-/mnt/data}/media:/media:ro
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=${TZ:-UTC}
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.jellyfin.rule=Host(`media.${DOMAIN}`)"
-      - "traefik.http.routers.jellyfin.entrypoints=websecure"
-      - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
-      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
-      - "traefik.http.routers.jellyfin.service=jellyfin"
-      - "traefik.http.routers.jellyfin.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.jellyfin-local.rule=HostRegexp(`{host:(media.localhost|media.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.jellyfin-local.entrypoints=web"
-      - "traefik.http.services.jellyfin-local.loadbalancer.server.port=8096"
-      - "traefik.http.routers.jellyfin-local.middlewares=local-only@file,security@file"
-
-  # LibreChat AI Interface
-  librechat:
-    image: ghcr.io/danny-avila/librechat:latest
-    container_name: librechat-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "3080:3080"
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/LibreChat
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-    depends_on:
-      - mongo
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.librechat.rule=Host(`librechat.${DOMAIN}`)"
-      - "traefik.http.routers.librechat.entrypoints=websecure"
-      - "traefik.http.routers.librechat.tls.certresolver=letsencrypt"
-      - "traefik.http.services.librechat.loadbalancer.server.port=3080"
-      - "traefik.http.routers.librechat.service=librechat"
-      - "traefik.http.routers.librechat.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.librechat-local.rule=HostRegexp(`{host:(librechat.localhost|librechat.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.librechat-local.entrypoints=web"
-      - "traefik.http.services.librechat-local.loadbalancer.server.port=3080"
-      - "traefik.http.routers.librechat-local.middlewares=local-only@file,security@file"
-
-  # MongoDB for LibreChat
-  mongo:
-    image: mongo:7
-    container_name: mongo-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-admin}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-password}
-    networks:
-      - llm_network
-
-  # Umami Analytics
-  umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest
-    container_name: umami-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "3006:3000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@neon-postgres:5432/umami
-      - DATABASE_TYPE=postgresql
-      - HASH_SALT=${UMAMI_HASH_SALT:-random-salt}
-    depends_on:
-      neon-postgres:
-        condition: service_healthy
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.umami.rule=Host(`analytics.${DOMAIN}`)"
-      - "traefik.http.routers.umami.entrypoints=websecure"
-      - "traefik.http.routers.umami.tls.certresolver=letsencrypt"
-      - "traefik.http.services.umami.loadbalancer.server.port=3000"
-      - "traefik.http.routers.umami.service=umami"
-      - "traefik.http.routers.umami.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.umami-local.rule=HostRegexp(`{host:(analytics.localhost|analytics.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.umami-local.entrypoints=web"
-      - "traefik.http.services.umami-local.loadbalancer.server.port=3000"
-      - "traefik.http.routers.umami-local.middlewares=local-only@file,security@file"
-
-  # Pi-hole DNS Filtering
-  pihole:
-    image: pihole/pihole:latest
-    container_name: pihole-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-      - "8082:80/tcp"
-    environment:
-      - TZ=${TZ:-UTC}
-      - WEBPASSWORD=${PIHOLE_PASSWORD:-admin}
-      - DNS1=1.1.1.1
-      - DNS2=1.0.0.1
-    volumes:
-      - pihole_data:/etc/pihole
-      - pihole_dnsmasq:/etc/dnsmasq.d
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Local/LAN access only
-      - "traefik.http.routers.pihole-local.rule=HostRegexp(`{host:(pihole.localhost|pihole.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.pihole-local.entrypoints=web"
-      - "traefik.http.services.pihole-local.loadbalancer.server.port=80"
-      - "traefik.http.routers.pihole-local.middlewares=local-only@file,security@file"
-
-  # Jitsi Meet (Video Conferencing)
-  jitsi-web:
-    image: jitsi/web:latest
-    container_name: jitsi-web-${DOMAIN_BASE}
-    restart: unless-stopped
-    ports:
-      - "8443:443"
-      - "8083:80"
-    environment:
-      - ENABLE_AUTH=1
-      - ENABLE_GUESTS=1
-      - ENABLE_LETSENCRYPT=0
-      - ENABLE_HTTP_REDIRECT=1
-      - LETSENCRYPT_DOMAIN=${DOMAIN}
-      - LETSENCRYPT_EMAIL=${ACME_EMAIL}
-      - PUBLIC_URL=https://meet.${DOMAIN}
-      - JVB_BREWERY_MUC=jvbbrewery
-      - JIGASI_BREWERY_MUC=jigasibrewery
-      - JIGASI_SIP_URI=jigasi@meet.${DOMAIN}
-      - JVB_STUN_SERVERS=meet-jit-si-turnrelay.jitsi.net:443
-      - ENABLE_RECORDING=1
-    volumes:
-      - jitsi_web:/config
-    networks:
-      - llm_network
-    labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.jitsi.rule=Host(`meet.${DOMAIN}`)"
-      - "traefik.http.routers.jitsi.entrypoints=websecure"
-      - "traefik.http.routers.jitsi.tls.certresolver=letsencrypt"
-      - "traefik.http.services.jitsi.loadbalancer.server.port=80"
-      - "traefik.http.routers.jitsi.service=jitsi"
-      - "traefik.http.routers.jitsi.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.jitsi-local.rule=HostRegexp(`{host:(meet.localhost|meet.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.jitsi-local.entrypoints=web"
-      - "traefik.http.services.jitsi-local.loadbalancer.server.port=80"
-      - "traefik.http.routers.jitsi-local.middlewares=local-only@file,security@file"
 
 # Volume configuration
 volumes:
@@ -1889,72 +1374,4 @@ volumes:
     driver_opts:
       type: none
       device: ${PWD}/element
-      o: bind
-  # Production project volumes
-  localstack_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/localstack
-      o: bind
-  elasticsearch_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/elasticsearch
-      o: bind
-  clickhouse_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/clickhouse
-      o: bind
-  rabbitmq_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/rabbitmq
-      o: bind
-  rtmp_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/rtmp
-      o: bind
-  pgadmin_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/pgadmin
-      o: bind
-  # Additional service volumes
-  jellyfin_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/jellyfin
-      o: bind
-  mongo_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/mongo
-      o: bind
-  pihole_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/pihole
-      o: bind
-  pihole_dnsmasq:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/pihole-dnsmasq
-      o: bind
-  jitsi_web:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/jitsi
       o: bind

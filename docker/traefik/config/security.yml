@@ -21,20 +21,16 @@ http:
     traefik-auth:
       basicAuth:
         users:
-          - "admin-codeofconsciousness:$$apr1$$YPwrnlVM$$w9eKVEBoLqdixVwFYzZzh1"
+          - "admin-leopaska:$$apr1$$YPwrnlVM$$w9eKVEBoLqdixVwFYzZzh1"
         removeHeader: true
 
     rustpad-auth:
       basicAuth:
         users:
-          - "admin-codeofconsciousness:$$apr1$$8tZvSTfN$$6sm0foSfqranEmCXjPiYc1"
+          - "admin-leopaska:$$apr1$$8tZvSTfN$$6sm0foSfqranEmCXjPiYc1"
         removeHeader: true
 
-    webui-auth:
-      basicAuth:
-        users:
-          - "admin-codeofconsciousness:$$apr1$$bRtp8Cqq$$WrIO6E8DaVJmgz2a9r7TZ1"
-        removeHeader: true
+
 
     local-only:
       ipWhiteList:

@@ -3,7 +3,7 @@
 
 # Network configuration
 internal_network: "192.168.1.0/24"
-main_server_ip: "192.168.1.200"  # alef
+main_server_ip: "108.51.59.178"  # alef
 legion_network_start: "192.168.1.201"
 legion_network_end: "192.168.1.240"
 

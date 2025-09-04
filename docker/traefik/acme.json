@@ -1,12 +1,12 @@
 {
   "letsencrypt": {
     "Account": {
-      "Email": "l3o@codeofconsciousness.com",
+      "Email": "l3o@leopaska.com",
       "Registration": {
         "body": {
           "status": "valid",
           "contact": [
-            "mailto:l3o@codeofconsciousness.com"
+            "mailto:l3o@leopaska.com"
           ]
         },
         "uri": "https://acme-v02.api.letsencrypt.org/acme/acct/2264568385"

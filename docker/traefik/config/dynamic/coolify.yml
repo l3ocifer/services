@@ -7,7 +7,7 @@ http:
 
   routers:
     coolify:
-      rule: "Host(`coolify.codeofconsciousness.com`)"
+      rule: "Host(`coolify.leopaska.com`)"
       service: coolify
       entryPoints:
         - websecure
@@ -17,7 +17,7 @@ http:
         - security@file
 
     coolify-http:
-      rule: "Host(`coolify.codeofconsciousness.com`)"
+      rule: "Host(`coolify.leopaska.com`)"
       service: coolify
       entryPoints:
         - web
@@ -25,7 +25,7 @@ http:
         - coolify-redirect
 
     coolify-ws:
-      rule: "Host(`coolify.codeofconsciousness.com`) && PathPrefix(`/socket.io`)"
+      rule: "Host(`coolify.leopaska.com`) && PathPrefix(`/socket.io`)"
       service: coolify-ws
       entryPoints:
         - websecure
@@ -33,7 +33,7 @@ http:
         certResolver: letsencrypt
 
     coolify-terminal:
-      rule: "Host(`coolify.codeofconsciousness.com`) && PathPrefix(`/terminal`)"
+      rule: "Host(`coolify.leopaska.com`) && PathPrefix(`/terminal`)"
       service: coolify-terminal
       entryPoints:
         - websecure
@@ -52,14 +52,14 @@ http:
     coolify:
       loadBalancer:
         servers:
-          - url: "http://coolify-codeofconsciousness:8080"
+          - url: "http://coolify-leopaska:8080"
     
     coolify-ws:
       loadBalancer:
         servers:
-          - url: "http://coolify-codeofconsciousness:6001"
+          - url: "http://coolify-leopaska:6001"
     
     coolify-terminal:
       loadBalancer:
         servers:
-          - url: "http://coolify-codeofconsciousness:6002"
+          - url: "http://coolify-leopaska:6002"
