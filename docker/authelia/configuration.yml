@@ -3,8 +3,7 @@ server:
   address: 'tcp://:9091'
 
 log:
-  level: debug
-  file_path: /config/authelia.log
+  level: info
 
 theme: light
 
@@ -74,13 +73,14 @@ access_control:
       policy: one_factor
 
 session:
+  secret: ${AUTHELIA_SESSION_SECRET}
   name: authelia_session
   expiration: 3600  # 1 hour
   inactivity: 300  # 5 minutes
   same_site: lax
   remember_me: 1M
   redis:
-    host: redis-nd-codeofconsciousness
+    host: redis-nd-leopaska
     port: 6379
     password: ${REDIS_PASSWORD}
     database_index: 0
@@ -93,26 +93,22 @@ session:
     - domain: localhost.local
       authelia_url: https://auth.localhost.local
       default_redirection_url: https://chat.localhost.local
-      insecure_cookie: true
+
     # IP-based access - we need separate entries for common private IP ranges
     - domain: 127.0.0.1
       authelia_url: https://127.0.0.1:9091
       default_redirection_url: https://127.0.0.1:8080
-      insecure_cookie: true
     # 192.168.x.x range
     - domain: 192.168.1.1
       authelia_url: https://192.168.1.1:9091
       default_redirection_url: https://192.168.1.1:8080
-      insecure_cookie: true
     # Additional common IP patterns
     - domain: 10.0.0.1
       authelia_url: https://10.0.0.1:9091
       default_redirection_url: https://10.0.0.1:8080
-      insecure_cookie: true
     - domain: 172.16.0.1
       authelia_url: https://172.16.0.1:9091
       default_redirection_url: https://172.16.0.1:8080
-      insecure_cookie: true
 
 regulation:
   max_retries: 3

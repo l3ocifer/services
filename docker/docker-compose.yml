@@ -45,7 +45,11 @@ services:
       - "--entrypoints.traefik.address=:8080"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"      # Jaeger tracing configuration
+      - "--tracing.jaeger=true"
+      - "--tracing.jaeger.samplingType=const"
+      - "--tracing.jaeger.samplingParam=1.0"
+      - "--tracing.jaeger.localAgentHostPort=jaeger-leopaska:6831"
     labels:
       - "traefik.enable=true"
       # Dashboard remote access
@@ -503,6 +507,7 @@ services:
       AUTHELIA_STORAGE_POSTGRES_DATABASE: authelia
       AUTHELIA_STORAGE_POSTGRES_PASSWORD: antidisestablishmentarianism7
       AUTHELIA_STORAGE_POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: antidisestablishmentarianism7
       DOMAIN: ${DOMAIN}
       LOCAL_DOMAIN: ${LOCAL_DOMAIN:-localhost}
       LOCAL_IP: ${LOCAL_IP:-127.0.0.1}
@@ -550,7 +555,7 @@ services:
       - N8N_HOST=n8n.${DOMAIN}
       - N8N_PROTOCOL=https
       - N8N_PORT=5678
-      - N8N_ENCRYPTION_KEY=${WEBUI_SECRET_KEY}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - N8N_BASIC_AUTH_ACTIVE=false
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=neon-postgres-${DOMAIN_BASE}
@@ -698,7 +703,7 @@ services:
       - DOMAIN=${DOMAIN}
       - LOCAL_DOMAIN=${LOCAL_DOMAIN:-localhost}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6167/_matrix/client/versions"]
+      test: ["CMD-SHELL", "echo 'GET /_matrix/client/versions HTTP/1.1\r\nHost: localhost\r\n\r\n' | nc localhost 6167 | grep -q 'HTTP/1.1 200' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1148,22 +1153,72 @@ services:
       - "traefik.http.services.huginn-local.loadbalancer.server.port=3000"
       - "traefik.http.routers.huginn-local.middlewares=local-only@file,security@file"
 
+  # LocalStack - AWS services emulation for development
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "4566:4566"
+      - "4510-4559:4510-4559"
+    environment:
+      - SERVICES=s3,dynamodb,sqs,sns,ses,lambda,cloudwatch,logs,events,apigateway,iam,sts
+      - DEBUG=${DEBUG:-0}
+      - DATA_DIR=/tmp/localstack/data
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - PERSISTENCE=1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - localstack_data:/tmp/localstack
+    networks:
+      - llm_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.localstack.rule=Host(`localstack.${DOMAIN}`)"
+      - "traefik.http.routers.localstack.entrypoints=websecure"
+      - "traefik.http.routers.localstack.tls.certresolver=letsencrypt"
+      - "traefik.http.services.localstack.loadbalancer.server.port=4566"
+
+  # Jaeger - Distributed tracing for all services
+  jaeger:
+    image: jaegertracing/all-in-one:1.45
+    container_name: jaeger-${DOMAIN_BASE}
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "16686:16686"
+      - "14250:14250"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:16686"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jaeger.rule=Host(`jaeger.${DOMAIN}`)"
+      - "traefik.http.routers.jaeger.entrypoints=websecure"
+      - "traefik.http.routers.jaeger.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jaeger.loadbalancer.server.port=16686"
+
   # Add Element for Matrix client
   element:
     image: vectorim/element-web:latest
     container_name: element-${DOMAIN_BASE}
     restart: unless-stopped
     volumes:
-      - element_config:/app/config.json
+      - element_config:/app/config
     environment:
       - DOMAIN=${DOMAIN}
       - LOCAL_DOMAIN=${LOCAL_DOMAIN:-localhost}
-    command: >
-      sh -c "cp /element_config/config.json /app/config.json &&
-             chmod 644 /app/config.json &&
-             sed -i \"s/\\\$${DOMAIN}/${DOMAIN}/g\" /app/config.json && 
-             sed -i \"s/matrix\.localhost/matrix.${LOCAL_DOMAIN:-localhost}/g\" /app/config.json && 
-             nginx -g 'daemon off;'"
     ports:
       - "6099:80"
     healthcheck:
@@ -1614,10 +1669,13 @@ services:
     ports:
       - "3080:3080"
     environment:
-      - MONGO_URI=mongodb://mongo:27017/LibreChat
+      - MONGO_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-password}@mongo:27017/LibreChat?authSource=admin
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET}
+      - CREDS_KEY=${CREDS_KEY}
+      - CREDS_IV=${CREDS_IV}
     depends_on:
       - mongo
     networks:
@@ -1886,17 +1944,9 @@ volumes:
       o: bind
   element_config:
     driver: local
-    driver_opts:
-      type: none
-      device: ${PWD}/element
-      o: bind
-  # Production project volumes
   localstack_data:
     driver: local
-    driver_opts:
-      type: none
-      device: ${DATA_DIR:-/mnt/data}/localstack
-      o: bind
+  # Production project volumes
   elasticsearch_data:
     driver: local
     driver_opts:

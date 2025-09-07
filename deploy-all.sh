@@ -230,6 +230,26 @@ deploy_service_if_needed() {
     fi
 }
 
+# Create database if it doesn't exist
+create_database_if_not_exists() {
+    local db_name="$1"
+    local postgres_container="neon-postgres-leopaska"
+    
+    log "Checking database: $db_name"
+    
+    # Check if database exists
+    if docker exec "$postgres_container" psql -U postgres -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "$db_name"; then
+        log "Database $db_name already exists"
+    else
+        log "Creating database $db_name..."
+        if docker exec "$postgres_container" psql -U postgres -c "CREATE DATABASE $db_name;" 2>/dev/null; then
+            success "Created database $db_name"
+        else
+            warning "Failed to create database $db_name (may already exist)"
+        fi
+    fi
+}
+
 # Deploy core infrastructure (idempotent)
 deploy_infrastructure() {
     log "Deploying core infrastructure services (idempotent)..."
@@ -249,6 +269,17 @@ deploy_infrastructure() {
     # Deploy services in dependency order
     deploy_service_if_needed "traefik" "docker-compose.yml" 10
     deploy_service_if_needed "neon-postgres" "docker-compose.yml" 15
+    
+    # Create required databases after PostgreSQL is up
+    create_database_if_not_exists "authelia"
+    create_database_if_not_exists "grafana"
+    create_database_if_not_exists "umami"
+    create_database_if_not_exists "vaultwarden"
+    create_database_if_not_exists "n8n"
+    create_database_if_not_exists "coolify"
+    create_database_if_not_exists "postiz"
+    create_database_if_not_exists "huginn"
+    
     deploy_service_if_needed "redis" "docker-compose.yml" 10
     deploy_service_if_needed "authelia" "docker-compose.yml" 10
     deploy_service_if_needed "vaultwarden" "docker-compose.yml" 10
@@ -554,6 +585,8 @@ display_service_urls() {
     echo "Adminer: http://localhost:8084 (local) | https://admin.leopaska.com (external)"
     echo "Redis Commander: http://localhost:8085 (local) | https://redis-admin.leopaska.com (external)"
     echo "PgAdmin: http://localhost:8086 (local) | https://pgadmin.leopaska.com (external)"
+    echo "LocalStack: http://localhost:4566 (local) | https://localstack.leopaska.com (external)"
+    echo "Jaeger: http://localhost:16686 (local) | https://jaeger.leopaska.com (external)"
     echo ""
     
     echo -e "${GREEN}=== PRODUCTION PROJECTS ===${NC}"
@@ -628,6 +661,7 @@ case "${1:-}" in
         echo "  --list         List available service categories"
         echo ""
         echo "Categories:"
+        echo "  - all: Deploy all services"
         for category in "${!SERVICE_CATEGORIES[@]}"; do
             echo "  - $category: ${SERVICE_CATEGORIES[$category]}"
         done
@@ -700,6 +734,9 @@ case "${1:-}" in
     "production")
         check_prerequisites
         deploy_production_projects
+        ;;
+    "all")
+        main
         ;;
     "")
         main
