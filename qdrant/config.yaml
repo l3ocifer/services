@@ -1,0 +1,57 @@
+# Qdrant configuration
+service:
+  # HTTP API configuration
+  http_port: 6333
+  grpc_port: 6334
+  # Enable the web UI
+  enable_tls: false
+  
+  # CORS configuration for web UI access
+  cors_allowed_origins:
+    - "*"
+  
+  # API key for authentication (optional)
+  # api_key: "${QDRANT_API_KEY}"
+  
+  # Read-only API key (optional)
+  # read_only_api_key: "${QDRANT_READ_ONLY_API_KEY}"
+
+storage:
+  # Storage configuration
+  storage_path: /qdrant/storage
+  
+  # WAL configuration
+  wal:
+    wal_capacity_mb: 32
+    wal_segments_ahead: 0
+  
+  # Performance optimizations
+  performance:
+    max_search_threads: 0  # 0 = auto-detect
+    max_optimization_threads: 1
+  
+  # Hnsw index configuration
+  hnsw_index:
+    m: 16
+    ef_construct: 100
+    max_indexing_threads: 0  # 0 = auto-detect
+    on_disk: false
+  
+  # Optimizers configuration
+  optimizers:
+    deleted_threshold: 0.2
+    vacuum_min_vector_number: 1000
+    default_segment_number: 0
+    memmap_threshold: 50000
+    indexing_threshold: 20000
+    flush_interval_sec: 5
+
+# Logging configuration
+log_level: INFO
+
+# Telemetry (disabled for privacy)
+telemetry_disabled: true
+
+# Cluster configuration (for single node)
+cluster:
+  enabled: false
