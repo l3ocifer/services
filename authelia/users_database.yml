@@ -1,0 +1,13 @@
+---
+users:
+  lpask001:
+    displayname: "Leo Paska"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$c3dHUUJzODVRcWRPQ0JqZQ$JTWfq8JUqjcXFD3YGgCWOFJYKlJxsO3hG9LqjH8jRzY"
+    email: l.paska@leopaska.xyz
+    groups:
+      - admins
+      - users
+
+groups:
+  - name: admins
+  - name: users

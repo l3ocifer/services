@@ -13,9 +13,9 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
+      - "80:80"    # Internal HTTP for CloudFlare tunnel
+      - "443:443"  # Internal HTTPS for CloudFlare tunnel  
+      - "8080:8080"  # Dashboard via tunnel
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/config:/etc/traefik/dynamic
@@ -40,24 +40,21 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.traefik.address=:8080"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--entrypoints.web.address=:80"        # Internal HTTP only
+      - "--entrypoints.websecure.address=:443" # Internal HTTPS only  
+      - "--entrypoints.traefik.address=:8080"  # Dashboard via tunnel
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.buckets=0.1,0.3,1.2,5.0"
     labels:
       - "traefik.enable=true"
-      # Dashboard remote access
-      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
-      - "traefik.http.routers.traefik.entrypoints=websecure"
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      # Unified dashboard access (tunnel + internal)
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`) || HostRegexp(`{host:(traefik.localhost|traefik.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.traefik.entrypoints=web,websecure,traefik"
       - "traefik.http.routers.traefik.service=api@internal"
-      # Local/LAN access
-      - "traefik.http.routers.traefik-local.rule=HostRegexp(`{host:(traefik.localhost|traefik.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.traefik-local.entrypoints=web"
-      - "traefik.http.routers.traefik-local.service=api@internal"
-      - "traefik.http.routers.traefik-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.traefik.middlewares=basic-auth@file,security@file"
     networks:
       - llm_network
 
@@ -84,26 +81,19 @@ services:
       resources:
         limits:
           memory: ${HOMEASSISTANT_MEMORY_LIMIT:-2G}
-          cpus: '2'
         reservations:
           memory: '512M'
-          cpus: '0.5'
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
       # Remote access
-      - "traefik.http.routers.homeassistant.rule=Host(`home.${DOMAIN}`)"
-      - "traefik.http.routers.homeassistant.entrypoints=websecure"
-      - "traefik.http.routers.homeassistant.tls.certresolver=letsencrypt"
+      # Unified HomeAssistant access (tunnel + internal)  
+      - "traefik.http.routers.homeassistant.rule=Host(`homeassistant.${DOMAIN}`) || HostRegexp(`{host:(home.localhost|home.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.homeassistant.entrypoints=web,websecure"
       - "traefik.http.services.homeassistant.loadbalancer.server.port=8123"
       - "traefik.http.routers.homeassistant.service=homeassistant"
-      - "traefik.http.routers.homeassistant.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.homeassistant-local.rule=HostRegexp(`{host:(home.localhost|home.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.homeassistant-local.entrypoints=web"
-      - "traefik.http.services.homeassistant-local.loadbalancer.server.port=8123"
-      - "traefik.http.routers.homeassistant-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.homeassistant.middlewares=api-rate-limit@file,security@file"
 
   #ollama:
   #  image: ollama/ollama:0.1.38
@@ -125,10 +115,8 @@ services:
   #    resources:
   #      limits:
   #        memory: ${OLLAMA_MEMORY_LIMIT:-32G}
-  #        cpus: '8'
   #      reservations:
   #        memory: ${OLLAMA_MEMORY_RESERVATION:-16G}
-  #        cpus: '2'
   #  networks:
   #    - llm_network
   #    - coolify_network
@@ -176,7 +164,6 @@ services:
       resources:
         limits:
           memory: 2G
-          cpus: '2'
         reservations:
           memory: 512M
     healthcheck:
@@ -189,18 +176,12 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.webui.rule=Host(`chat.${DOMAIN}`)"
-      - "traefik.http.routers.webui.entrypoints=websecure"
-      - "traefik.http.routers.webui.tls.certresolver=letsencrypt"
+      # Unified LibreChat access (tunnel + internal)
+      - "traefik.http.routers.webui.rule=Host(`librechat.${DOMAIN}`) || HostRegexp(`{host:(chat.localhost|chat.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.webui.entrypoints=web,websecure"
       - "traefik.http.services.webui.loadbalancer.server.port=8080"
       - "traefik.http.routers.webui.service=webui"
-      - "traefik.http.routers.webui.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.webui-local.rule=HostRegexp(`{host:(chat.localhost|chat.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.webui-local.entrypoints=web"
-      - "traefik.http.services.webui-local.loadbalancer.server.port=8080"
-      - "traefik.http.routers.webui-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.webui.middlewares=api-rate-limit@file,security@file"
 
   # Update neon-postgres service to include Traefik labels from neon
   neon-postgres:
@@ -225,26 +206,18 @@ services:
       resources:
         limits:
           memory: ${POSTGRES_MEMORY_LIMIT:-4G}
-          cpus: '2'
     ports:
       - "5432:5432"
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Define services
+      # PostgreSQL - Internal access only (database should not be exposed via tunnel)
       - "traefik.http.services.neon-db.loadbalancer.server.port=5432"
-      # Remote access
-      - "traefik.http.routers.neon-db.rule=Host(`db.${DOMAIN}`)"
-      - "traefik.http.routers.neon-db.entrypoints=websecure"
-      - "traefik.http.routers.neon-db.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.neon-db.rule=HostRegexp(`{host:(db.localhost|db.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.neon-db.entrypoints=web"
       - "traefik.http.routers.neon-db.service=neon-db"
-      - "traefik.http.routers.neon-db.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.neon-db-local.rule=HostRegexp(`{host:(db.localhost|db.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.neon-db-local.entrypoints=web"
-      - "traefik.http.routers.neon-db-local.service=neon-db"
-      - "traefik.http.routers.neon-db-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.neon-db.middlewares=local-only@file,admin-rate-limit@file,security@file"
 
   # Add a Redis cache service for improved performance
   redis:
@@ -265,10 +238,8 @@ services:
       resources:
         limits:
           memory: ${REDIS_MEMORY_LIMIT:-1G}
-          cpus: '1'
         reservations:
           memory: '128M'
-          cpus: '0.2'
     networks:
       - llm_network
     labels:
@@ -300,7 +271,6 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '0.5'
     healthcheck:
       test: ["CMD", "sh", "-c", "grep vector /proc/1/cmdline || exit 1"]
       interval: 30s
@@ -327,20 +297,14 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
+      # Unified RustPad access (tunnel + internal)
       - "traefik.http.services.rustpad-service.loadbalancer.server.port=3030"
-      - "traefik.http.routers.rustpad.rule=Host(`pad.${DOMAIN}`)"
-      - "traefik.http.routers.rustpad.entrypoints=websecure"
-      - "traefik.http.routers.rustpad.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.rustpad.rule=Host(`rustpad.${DOMAIN}`) || HostRegexp(`{host:(pad.localhost|pad.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.rustpad.entrypoints=web,websecure"
       - "traefik.http.routers.rustpad.service=rustpad-service"
-      - "traefik.http.routers.rustpad.middlewares=rustpad-auth@file,rustpad-ws@docker,security@file"
+      - "traefik.http.routers.rustpad.middlewares=basic-auth@file,api-rate-limit@file,rustpad-ws@docker,security@file"
       - "traefik.http.middlewares.rustpad-ws.headers.customrequestheaders.Connection=Upgrade"
       - "traefik.http.middlewares.rustpad-ws.headers.customrequestheaders.Upgrade=websocket"
-      # Local/LAN access
-      - "traefik.http.routers.rustpad-local.rule=HostRegexp(`{host:(pad.localhost|pad.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.rustpad-local.entrypoints=web"
-      - "traefik.http.services.rustpad-local.loadbalancer.server.port=3030"
-      - "traefik.http.routers.rustpad-local.middlewares=rustpad-ws-local@docker,security@file"
 
   # Add Prometheus for metrics collection
   prometheus:
@@ -372,26 +336,18 @@ services:
       resources:
         limits:
           memory: ${MONITORING_MEMORY_LIMIT:-4G}
-          cpus: '2'
         reservations:
           memory: '512M'
-          cpus: '0.5'
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.prometheus.rule=Host(`metrics.${DOMAIN}`)"
-      - "traefik.http.routers.prometheus.entrypoints=websecure"
-      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      # Unified Prometheus access (tunnel + internal) - Admin service
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN}`) || HostRegexp(`{host:(metrics.localhost|metrics.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.prometheus.entrypoints=web,websecure"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
       - "traefik.http.routers.prometheus.service=prometheus"
-      - "traefik.http.routers.prometheus.middlewares=traefik-auth@file,security@file"
-      # Local/LAN access
-      - "traefik.http.routers.prometheus-local.rule=HostRegexp(`{host:(metrics.localhost|metrics.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.prometheus-local.entrypoints=web"
-      - "traefik.http.services.prometheus-local.loadbalancer.server.port=9090"
-      - "traefik.http.routers.prometheus-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.prometheus.middlewares=basic-auth@file,admin-rate-limit@file,security@file"
 
   # Update Grafana service to use PostgreSQL
   grafana:
@@ -429,25 +385,18 @@ services:
       resources:
         limits:
           memory: 1G
-          cpus: '1'
         reservations:
           memory: 256M
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
-      - "traefik.http.routers.grafana.entrypoints=websecure"
-      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      # Unified Grafana access (tunnel + internal) - Admin service
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`) || HostRegexp(`{host:(grafana.localhost|grafana.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.grafana.entrypoints=web,websecure"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
       - "traefik.http.routers.grafana.service=grafana"
-      - "traefik.http.routers.grafana.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.grafana-local.rule=HostRegexp(`{host:(grafana.localhost|grafana.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.grafana-local.entrypoints=web"
-      - "traefik.http.services.grafana-local.loadbalancer.server.port=3000"
-      - "traefik.http.routers.grafana-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.grafana.middlewares=admin-rate-limit@file,conditional-auth@file,security@file"
 
   # Add Loki for log aggregation
   loki:
@@ -469,26 +418,18 @@ services:
       resources:
         limits:
           memory: 1G
-          cpus: '1'
         reservations:
           memory: 256M
-          cpus: '0.2'
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.loki.rule=Host(`logs.${DOMAIN}`)"
-      - "traefik.http.routers.loki.entrypoints=websecure"
-      - "traefik.http.routers.loki.tls.certresolver=letsencrypt"
+      # Unified Loki access (tunnel + internal) - Admin service
+      - "traefik.http.routers.loki.rule=Host(`loki.${DOMAIN}`) || HostRegexp(`{host:(logs.localhost|logs.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.loki.entrypoints=web,websecure"
       - "traefik.http.services.loki.loadbalancer.server.port=3100"
       - "traefik.http.routers.loki.service=loki"
-      - "traefik.http.routers.loki.middlewares=traefik-auth@file,security@file"
-      # Local/LAN access
-      - "traefik.http.routers.loki-local.rule=HostRegexp(`{host:(logs.localhost|logs.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.loki-local.entrypoints=web"
-      - "traefik.http.services.loki-local.loadbalancer.server.port=3100"
-      - "traefik.http.routers.loki-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.loki.middlewares=basic-auth@file,admin-rate-limit@file,security@file"
 
   # Update authelia service to use neon-postgres
   authelia:
@@ -526,18 +467,12 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.authelia.rule=Host(`auth.${DOMAIN}`)"
-      - "traefik.http.routers.authelia.entrypoints=websecure"
-      - "traefik.http.routers.authelia.tls.certresolver=letsencrypt"
+      # Unified Authelia access (tunnel + internal) - Authentication service
+      - "traefik.http.routers.authelia.rule=Host(`authelia.${DOMAIN}`) || HostRegexp(`{host:(auth.localhost|auth.lan|auth.local|auth.192\\.168\\..*|auth.10\\..*|auth.172\\..*|localhost|lan|local|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
+      - "traefik.http.routers.authelia.entrypoints=web,websecure"
       - "traefik.http.services.authelia.loadbalancer.server.port=9091"
       - "traefik.http.routers.authelia.service=authelia"
-      - "traefik.http.routers.authelia.middlewares=security@file"
-      # Local/LAN access - expanded pattern coverage
-      - "traefik.http.routers.authelia-local.rule=HostRegexp(`{host:(auth.localhost|auth.lan|auth.local|auth.192\\.168\\..*|auth.10\\..*|auth.172\\..*|localhost|lan|local|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
-      - "traefik.http.routers.authelia-local.entrypoints=web"
-      - "traefik.http.services.authelia-local.loadbalancer.server.port=9091"
-      - "traefik.http.routers.authelia-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.authelia.middlewares=api-rate-limit@file,security@file"
 
   # Update n8n service to use neon-postgres
   n8n:
@@ -549,7 +484,8 @@ services:
     environment:
       - N8N_HOST=n8n.${DOMAIN}
       - N8N_PROTOCOL=https
-      - N8N_PORT=5678
+      - N8N_PORT=443
+      - WEBHOOK_URL=https://n8n.${DOMAIN}
       - N8N_ENCRYPTION_KEY=${WEBUI_SECRET_KEY}
       - N8N_BASIC_AUTH_ACTIVE=false
       - DB_TYPE=postgresdb
@@ -573,25 +509,18 @@ services:
       resources:
         limits:
           memory: 2G
-          cpus: '2'
         reservations:
           memory: 512M
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN}`)"
-      - "traefik.http.routers.n8n.entrypoints=websecure"
-      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+      # Unified N8N access (tunnel + internal) - Productivity service
+      - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN}`) || HostRegexp(`{host:(n8n.localhost|n8n.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.n8n.entrypoints=web,websecure"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
       - "traefik.http.routers.n8n.service=n8n"
-      - "traefik.http.routers.n8n.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.n8n-local.rule=HostRegexp(`{host:(n8n.localhost|n8n.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.n8n-local.entrypoints=web"
-      - "traefik.http.services.n8n-local.loadbalancer.server.port=5678"
-      - "traefik.http.routers.n8n-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.n8n.middlewares=api-rate-limit@file,security@file"
 
   # Update Uptime Kuma service to use PostgreSQL
   uptime-kuma:
@@ -616,23 +545,16 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '1'
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.uptime-kuma.rule=Host(`status.${DOMAIN}`)"
-      - "traefik.http.routers.uptime-kuma.entrypoints=websecure"
-      - "traefik.http.routers.uptime-kuma.tls.certresolver=letsencrypt"
+      # Unified Uptime Kuma access (tunnel + internal) - Monitoring service
+      - "traefik.http.routers.uptime-kuma.rule=Host(`uptimekuma.${DOMAIN}`) || HostRegexp(`{host:(status.localhost|status.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.uptime-kuma.entrypoints=web,websecure"
       - "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
       - "traefik.http.routers.uptime-kuma.service=uptime-kuma"
-      - "traefik.http.routers.uptime-kuma.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.uptime-kuma-local.rule=HostRegexp(`{host:(status.localhost|status.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.uptime-kuma-local.entrypoints=web"
-      - "traefik.http.services.uptime-kuma-local.loadbalancer.server.port=3001"
-      - "traefik.http.routers.uptime-kuma-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.uptime-kuma.middlewares=api-rate-limit@file,security@file"
 
   # Update vaultwarden service to use neon-postgres
   vaultwarden:
@@ -655,22 +577,15 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.vaultwarden.rule=Host(`vault.${DOMAIN}`)"
-      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
-      - "traefik.http.routers.vaultwarden.tls.certresolver=letsencrypt"
+      # Unified Vaultwarden access (tunnel + internal) - Security service
+      - "traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.${DOMAIN}`) || HostRegexp(`{host:(vault.localhost|vault.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=web,websecure"
       - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
       - "traefik.http.routers.vaultwarden.service=vaultwarden"
-      - "traefik.http.routers.vaultwarden.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.vaultwarden-local.rule=HostRegexp(`{host:(vault.localhost|vault.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.vaultwarden-local.entrypoints=web"
-      - "traefik.http.services.vaultwarden-local.loadbalancer.server.port=80"
-      - "traefik.http.routers.vaultwarden-local.middlewares=local-only@file,security@file"
-      # Websocket support
-      - "traefik.http.routers.vaultwarden-ws.rule=Host(`vault.${DOMAIN}`) && Path(`/notifications/hub`)"
-      - "traefik.http.routers.vaultwarden-ws.entrypoints=websecure"
-      - "traefik.http.routers.vaultwarden-ws.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.vaultwarden.middlewares=api-rate-limit@file,security@file"
+      # Websocket support - unified
+      - "traefik.http.routers.vaultwarden-ws.rule=(Host(`vaultwarden.${DOMAIN}`) || HostRegexp(`{host:(vault.localhost|vault.lan|192\\.168\\..*|172\\..*|10\\..*)}`)) && Path(`/notifications/hub`)"
+      - "traefik.http.routers.vaultwarden-ws.entrypoints=web,websecure"
       - "traefik.http.services.vaultwarden-ws.loadbalancer.server.port=3012"
       - "traefik.http.routers.vaultwarden-ws.service=vaultwarden-ws"
 
@@ -704,16 +619,11 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.conduit.rule=Host(`matrix.${DOMAIN}`)"
-      - "traefik.http.routers.conduit.entrypoints=websecure"
-      - "traefik.http.routers.conduit.tls.certresolver=letsencrypt"
+      # Unified Conduit access (tunnel + internal) - Communication service
+      - "traefik.http.routers.conduit.rule=Host(`conduit.${DOMAIN}`) || HostRegexp(`{host:(matrix.localhost|matrix.lan|matrix.local|matrix.192\\.168\\..*|matrix.10\\..*|matrix.172\\..*|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
+      - "traefik.http.routers.conduit.entrypoints=web,websecure"
       - "traefik.http.services.conduit.loadbalancer.server.port=6167"
-      - "traefik.http.routers.conduit.middlewares=security@file"
-      # Local/LAN access with improved patterns
-      - "traefik.http.routers.conduit-local.rule=HostRegexp(`{host:(matrix.localhost|matrix.lan|matrix.local|matrix.192\\.168\\..*|matrix.10\\..*|matrix.172\\..*|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
-      - "traefik.http.routers.conduit-local.entrypoints=web"
-      - "traefik.http.services.conduit-local.loadbalancer.server.port=6167"
-      - "traefik.http.routers.conduit-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.conduit.middlewares=api-rate-limit@file,security@file"
 
   # Update spacedrive service with auth configuration
   spacedrive:
@@ -746,18 +656,12 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.spacedrive.rule=Host(`drive.${DOMAIN}`)"
-      - "traefik.http.routers.spacedrive.entrypoints=websecure"
-      - "traefik.http.routers.spacedrive.tls.certresolver=letsencrypt"
+      # Unified Spacedrive access (tunnel + internal) - Storage service
+      - "traefik.http.routers.spacedrive.rule=Host(`spacedrive.${DOMAIN}`) || HostRegexp(`{host:(drive.localhost|drive.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.spacedrive.entrypoints=web,websecure"
       - "traefik.http.services.spacedrive.loadbalancer.server.port=8080"
       - "traefik.http.routers.spacedrive.service=spacedrive"
-      - "traefik.http.routers.spacedrive.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.spacedrive-local.rule=HostRegexp(`{host:(drive.localhost|drive.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.spacedrive-local.entrypoints=web"
-      - "traefik.http.services.spacedrive-local.loadbalancer.server.port=8080"
-      - "traefik.http.routers.spacedrive-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.spacedrive.middlewares=api-rate-limit@file,security@file"
 
   # Coolify - Self-hosted Heroku / Netlify / Vercel alternative
   # Note: After setup, create a manual entry in "Keys & Tokens" menu for 
@@ -801,25 +705,23 @@ services:
     networks:
       - llm_network
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.coolify.rule=Host(`coolify.${DOMAIN}`)
-      - traefik.http.routers.coolify.entrypoints=websecure
-      - traefik.http.routers.coolify.tls=true
-      - traefik.http.routers.coolify.tls.certresolver=letsencrypt
-      - traefik.http.services.coolify.loadbalancer.server.port=8080
-      - traefik.docker.network=llm_network
-      # Websocket handling
-      - traefik.http.routers.coolify-ws.rule=Host(`coolify.${DOMAIN}`) && PathPrefix(`/socket.io`)
-      - traefik.http.routers.coolify-ws.entrypoints=websecure
-      - traefik.http.routers.coolify-ws.tls=true
-      - traefik.http.routers.coolify-ws.service=coolify-ws
-      - traefik.http.services.coolify-ws.loadbalancer.server.port=6001
-      # Terminal handling
-      - traefik.http.routers.coolify-terminal.rule=Host(`coolify.${DOMAIN}`) && PathPrefix(`/terminal`)
-      - traefik.http.routers.coolify-terminal.entrypoints=websecure
-      - traefik.http.routers.coolify-terminal.tls=true
-      - traefik.http.routers.coolify-terminal.service=coolify-terminal
-      - traefik.http.services.coolify-terminal.loadbalancer.server.port=6002
+      - "traefik.enable=true"
+      # Unified Coolify access (tunnel + internal) - Deployment service
+      - "traefik.http.routers.coolify.rule=Host(`coolify.${DOMAIN}`) || HostRegexp(`{host:(coolify.localhost|coolify.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.coolify.entrypoints=web,websecure"
+      - "traefik.http.services.coolify.loadbalancer.server.port=8080"
+      - "traefik.http.routers.coolify.middlewares=admin-rate-limit@file,conditional-auth@file,security@file"
+      - "traefik.docker.network=llm_network"
+      # Websocket handling - unified
+      - "traefik.http.routers.coolify-ws.rule=(Host(`coolify.${DOMAIN}`) || HostRegexp(`{host:(coolify.localhost|coolify.lan|192\\.168\\..*|172\\..*|10\\..*)}`)) && PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.coolify-ws.entrypoints=web,websecure"
+      - "traefik.http.services.coolify-ws.loadbalancer.server.port=6001"
+      - "traefik.http.routers.coolify-ws.service=coolify-ws"
+      # Terminal handling - unified
+      - "traefik.http.routers.coolify-terminal.rule=(Host(`coolify.${DOMAIN}`) || HostRegexp(`{host:(coolify.localhost|coolify.lan|192\\.168\\..*|172\\..*|10\\..*)}`)) && PathPrefix(`/terminal`)"
+      - "traefik.http.routers.coolify-terminal.entrypoints=web,websecure"
+      - "traefik.http.services.coolify-terminal.loadbalancer.server.port=6002"
+      - "traefik.http.routers.coolify-terminal.service=coolify-terminal"
 
   # Add node-exporter service for Prometheus
   node-exporter:
@@ -841,7 +743,6 @@ services:
       resources:
         limits:
           memory: 256M
-          cpus: '0.2'
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/metrics"]
       interval: 30s
@@ -878,7 +779,6 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '1'
     labels:
       - "traefik.enable=true"
       # Remote access
@@ -910,7 +810,6 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '1'
     labels:
       - "traefik.enable=true"
       # Remote access
@@ -942,7 +841,6 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '1'
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "http://localhost:8384/"]
       interval: 60s
@@ -953,18 +851,12 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.syncthing.rule=Host(`sync.${DOMAIN}`)"
-      - "traefik.http.routers.syncthing.entrypoints=websecure"
-      - "traefik.http.routers.syncthing.tls.certresolver=letsencrypt"
+      # Unified Syncthing access (tunnel + internal) - Sync service
+      - "traefik.http.routers.syncthing.rule=Host(`syncthing.${DOMAIN}`) || HostRegexp(`{host:(sync.localhost|sync.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.syncthing.entrypoints=web,websecure"
       - "traefik.http.services.syncthing.loadbalancer.server.port=8384"
       - "traefik.http.routers.syncthing.service=syncthing"
-      - "traefik.http.routers.syncthing.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.syncthing-local.rule=HostRegexp(`{host:(sync.localhost|sync.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.syncthing-local.entrypoints=web"
-      - "traefik.http.services.syncthing-local.loadbalancer.server.port=8384"
-      - "traefik.http.routers.syncthing-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.syncthing.middlewares=api-rate-limit@file,security@file"
 
   # Update postiz service with improved configuration
   postiz:
@@ -1005,17 +897,11 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.postiz.rule=Host(`notes.${DOMAIN}`)"
-      - "traefik.http.routers.postiz.entrypoints=websecure"
-      - "traefik.http.routers.postiz.tls=true"
-      - "traefik.http.routers.postiz.tls.certresolver=letsencrypt"
+      # Unified Postiz access (tunnel + internal) - Social media service
+      - "traefik.http.routers.postiz.rule=Host(`postiz.${DOMAIN}`) || HostRegexp(`{host:(notes.localhost|notes.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.postiz.entrypoints=web,websecure"
       - "traefik.http.services.postiz.loadbalancer.server.port=5000"
-      - "traefik.http.routers.postiz.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.postiz-local.rule=HostRegexp(`{host:(notes.localhost|notes.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.postiz-local.entrypoints=web"
-      - "traefik.http.services.postiz-local.loadbalancer.server.port=5000"
-      - "traefik.http.routers.postiz-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.postiz.middlewares=api-rate-limit@file,security@file"
     deploy:
       resources:
         limits:
@@ -1041,7 +927,6 @@ services:
       resources:
         limits:
           memory: 2G
-          cpus: '2'
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 30s
@@ -1052,25 +937,12 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # API Remote access
-      - "traefik.http.routers.minio.rule=Host(`s3.${DOMAIN}`)"
-      - "traefik.http.routers.minio.entrypoints=websecure"
-      - "traefik.http.routers.minio.tls.certresolver=letsencrypt"
-      - "traefik.http.services.minio.loadbalancer.server.port=9000"
+      # Unified MinIO Console access (tunnel + internal) - Storage service
+      - "traefik.http.routers.minio.rule=Host(`minio.${DOMAIN}`) || HostRegexp(`{host:(s3.localhost|s3.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.minio.entrypoints=web,websecure"
+      - "traefik.http.services.minio.loadbalancer.server.port=9001"
       - "traefik.http.routers.minio.service=minio"
-      - "traefik.http.routers.minio.middlewares=security@file"
-      # Console Remote access
-      - "traefik.http.routers.minio-console.rule=Host(`s3-console.${DOMAIN}`)"
-      - "traefik.http.routers.minio-console.entrypoints=websecure"
-      - "traefik.http.routers.minio-console.tls.certresolver=letsencrypt"
-      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
-      - "traefik.http.routers.minio-console.service=minio-console"
-      - "traefik.http.routers.minio-console.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.minio-local.rule=HostRegexp(`{host:(s3.localhost|s3.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.minio-local.entrypoints=web"
-      - "traefik.http.services.minio-local.loadbalancer.server.port=9000"
-      - "traefik.http.routers.minio-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.minio.middlewares=api-rate-limit@file,security@file"
 
   # Add Huginn for automation
   huginn:
@@ -1121,26 +993,18 @@ services:
       resources:
         limits:
           memory: ${HUGINN_MEMORY_LIMIT:-2G}
-          cpus: '2'
         reservations:
           memory: '512M'
-          cpus: '0.5'
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.huginn.rule=Host(`huginn.${DOMAIN}`)"
-      - "traefik.http.routers.huginn.entrypoints=websecure"
-      - "traefik.http.routers.huginn.tls.certresolver=letsencrypt"
+      # Unified Huginn access (tunnel + internal) - Automation service
+      - "traefik.http.routers.huginn.rule=Host(`huginn.${DOMAIN}`) || HostRegexp(`{host:(huginn.localhost|huginn.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.huginn.entrypoints=web,websecure"
       - "traefik.http.services.huginn.loadbalancer.server.port=3000"
       - "traefik.http.routers.huginn.service=huginn"
-      - "traefik.http.routers.huginn.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.huginn-local.rule=HostRegexp(`{host:(huginn.localhost|huginn.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.huginn-local.entrypoints=web"
-      - "traefik.http.services.huginn-local.loadbalancer.server.port=3000"
-      - "traefik.http.routers.huginn-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.huginn.middlewares=api-rate-limit@file,security@file"
 
   # Add Element for Matrix client
   element:
@@ -1170,16 +1034,11 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.element.rule=Host(`chat-matrix.${DOMAIN}`)"
-      - "traefik.http.routers.element.entrypoints=websecure"
-      - "traefik.http.routers.element.tls.certresolver=letsencrypt"
+      # Unified Element access (tunnel + internal) - Matrix client
+      - "traefik.http.routers.element.rule=Host(`element.${DOMAIN}`) || HostRegexp(`{host:(chat-matrix.localhost|chat-matrix.lan|chat-matrix.local|matrix.localhost|matrix.lan|chat-matrix.192\\.168\\..*|chat-matrix.10\\..*|chat-matrix.172\\..*|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
+      - "traefik.http.routers.element.entrypoints=web,websecure"
       - "traefik.http.services.element.loadbalancer.server.port=80"
-      - "traefik.http.routers.element.middlewares=security@file"
-      # Local/LAN access - improved patterns for various local networks
-      - "traefik.http.routers.element-local.rule=HostRegexp(`{host:(chat-matrix.localhost|chat-matrix.lan|chat-matrix.local|matrix.localhost|matrix.lan|chat-matrix.192\\.168\\..*|chat-matrix.10\\..*|chat-matrix.172\\..*|192\\.168\\..*|10\\..*|172\\..*|127\\.0\\.0\\.1)}`)"
-      - "traefik.http.routers.element-local.entrypoints=web"
-      - "traefik.http.services.element-local.loadbalancer.server.port=80"
-      - "traefik.http.routers.element-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.element.middlewares=api-rate-limit@file,security@file"
 
   # Add Qdrant vector database for AI/ML applications
   qdrant:
@@ -1203,26 +1062,18 @@ services:
       resources:
         limits:
           memory: ${QDRANT_MEMORY_LIMIT:-4G}
-          cpus: '2'
         reservations:
           memory: '512M'
-          cpus: '0.5'
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.qdrant.rule=Host(`vectors.${DOMAIN}`)"
-      - "traefik.http.routers.qdrant.entrypoints=websecure"
-      - "traefik.http.routers.qdrant.tls.certresolver=letsencrypt"
+      # Unified Qdrant access (tunnel + internal) - Vector database (internal use)
+      - "traefik.http.routers.qdrant.rule=HostRegexp(`{host:(vectors.localhost|vectors.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.qdrant.entrypoints=web"
       - "traefik.http.services.qdrant.loadbalancer.server.port=6333"
       - "traefik.http.routers.qdrant.service=qdrant"
-      - "traefik.http.routers.qdrant.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.qdrant-local.rule=HostRegexp(`{host:(vectors.localhost|vectors.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.qdrant-local.entrypoints=web"
-      - "traefik.http.services.qdrant-local.loadbalancer.server.port=6333"
-      - "traefik.http.routers.qdrant-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.qdrant.middlewares=local-only@file,admin-rate-limit@file,security@file"
 
   # Add WhoDB for PostgreSQL database exploration
   whodb:
@@ -1254,23 +1105,136 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '1'
     networks:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.whodb.rule=Host(`db-explorer.${DOMAIN}`)"
-      - "traefik.http.routers.whodb.entrypoints=websecure"
-      - "traefik.http.routers.whodb.tls.certresolver=letsencrypt"
+      # Unified WhoDB access (tunnel + internal) - Database explorer
+      - "traefik.http.routers.whodb.rule=Host(`whodb.${DOMAIN}`) || HostRegexp(`{host:(db-explorer.localhost|db-explorer.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.whodb.entrypoints=web,websecure"
       - "traefik.http.services.whodb.loadbalancer.server.port=8080"
       - "traefik.http.routers.whodb.service=whodb"
-      - "traefik.http.routers.whodb.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.whodb-local.rule=HostRegexp(`{host:(db-explorer.localhost|db-explorer.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.whodb-local.entrypoints=web"
-      - "traefik.http.services.whodb-local.loadbalancer.server.port=8080"
-      - "traefik.http.routers.whodb-local.middlewares=local-only@file,security@file"
+      - "traefik.http.routers.whodb.middlewares=basic-auth@file,admin-rate-limit@file,security@file"
+
+  # MailHog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Unified MailHog access (tunnel + internal) - Development tool
+      - "traefik.http.routers.mailhog.rule=Host(`mailhog.${DOMAIN}`) || HostRegexp(`{host:(mail.localhost|mail.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.mailhog.entrypoints=web,websecure"
+      - "traefik.http.services.mailhog.loadbalancer.server.port=8025"
+      - "traefik.http.routers.mailhog.service=mailhog"
+      - "traefik.http.routers.mailhog.middlewares=basic-auth@file,api-rate-limit@file,security@file"
+
+  # PgAdmin for PostgreSQL administration
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Unified PgAdmin access (tunnel + internal) - Admin tool
+      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.${DOMAIN}`) || HostRegexp(`{host:(pgadmin.localhost|pgadmin.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.pgadmin.entrypoints=web,websecure"
+      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
+      - "traefik.http.routers.pgadmin.service=pgadmin"
+      - "traefik.http.routers.pgadmin.middlewares=admin-rate-limit@file,conditional-auth@file,security@file"
+
+  # Adminer for lightweight database administration
+  adminer:
+    image: adminer:latest
+    container_name: adminer-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "8084:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=neon-postgres
+      - ADMINER_DESIGN=pepa-linha
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Unified Adminer access (tunnel + internal) - Admin tool
+      - "traefik.http.routers.adminer.rule=Host(`adminer.${DOMAIN}`) || HostRegexp(`{host:(admin.localhost|admin.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.adminer.entrypoints=web,websecure"
+      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
+      - "traefik.http.routers.adminer.service=adminer"
+      - "traefik.http.routers.adminer.middlewares=basic-auth@file,admin-rate-limit@file,security@file"
+
+  # RabbitMQ for message queuing
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-admin}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-admin_password}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Unified RabbitMQ access (tunnel + internal) - Infrastructure service
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.${DOMAIN}`) || HostRegexp(`{host:(rabbitmq.localhost|rabbitmq.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.rabbitmq.entrypoints=web,websecure"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+      - "traefik.http.routers.rabbitmq.service=rabbitmq"
+      - "traefik.http.routers.rabbitmq.middlewares=admin-rate-limit@file,security@file"
+
+  # Jellyfin Media Server
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    volumes:
+      - jellyfin_data:/config
+      - ${DATA_DIR:-/mnt/data}/media:/media:ro
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Unified Jellyfin access (tunnel + internal) - Media service (has built-in auth)
+      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.${DOMAIN}`) || HostRegexp(`{host:(media.localhost|media.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.jellyfin.entrypoints=web,websecure"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+      - "traefik.http.routers.jellyfin.service=jellyfin"
+      - "traefik.http.routers.jellyfin.middlewares=api-rate-limit@file,security@file"
 
 # Volume configuration
 volumes:
@@ -1417,4 +1381,22 @@ volumes:
     driver_opts:
       type: none
       device: ${DATA_DIR:-/mnt/data}/qdrant
+      o: bind
+  pgadmin_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/pgadmin
+      o: bind
+  rabbitmq_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/rabbitmq
+      o: bind
+  jellyfin_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${DATA_DIR:-/mnt/data}/jellyfin
       o: bind

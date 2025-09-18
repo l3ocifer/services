@@ -254,7 +254,7 @@ create_database_if_not_exists() {
 deploy_infrastructure() {
     log "Deploying core infrastructure services (idempotent)..."
     
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     
     # Check if .env file exists
     if [[ ! -f ".env" ]]; then
@@ -266,13 +266,18 @@ deploy_infrastructure() {
         fi
     fi
     
-    # Deploy services in dependency order
-    deploy_service_if_needed "traefik" "docker-compose.yml" 10
-    deploy_service_if_needed "neon-postgres" "docker-compose.yml" 15
+    # Deploy infrastructure in parallel after dependencies
+    log "Starting core infrastructure services..."
+    docker-compose up -d traefik neon-postgres redis minio &
+    INFRA_PID=$!
+    
+    # Wait for infrastructure to be ready
+    wait $INFRA_PID
+    sleep 15  # Allow services to fully initialize
     
     # Create required databases after PostgreSQL is up
     create_database_if_not_exists "authelia"
-    create_database_if_not_exists "grafana"
+    create_database_if_not_exists "grafana" 
     create_database_if_not_exists "umami"
     create_database_if_not_exists "vaultwarden"
     create_database_if_not_exists "n8n"
@@ -280,10 +285,8 @@ deploy_infrastructure() {
     create_database_if_not_exists "postiz"
     create_database_if_not_exists "huginn"
     
-    deploy_service_if_needed "redis" "docker-compose.yml" 10
-    deploy_service_if_needed "authelia" "docker-compose.yml" 10
-    deploy_service_if_needed "vaultwarden" "docker-compose.yml" 10
-    deploy_service_if_needed "minio" "docker-compose.yml" 10
+    # Deploy dependent infrastructure services
+    docker-compose up -d authelia vaultwarden
     
     success "Core infrastructure deployment completed"
 }
@@ -292,16 +295,15 @@ deploy_infrastructure() {
 deploy_ai_ml() {
     log "Deploying AI/ML services (idempotent)..."
     
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     
-    # Deploy AI/ML services
-    deploy_service_if_needed "webui" "docker-compose.yml" 15
-    deploy_service_if_needed "whodb" "docker-compose.yml" 10
-    deploy_service_if_needed "librechat" "docker-compose.yml" 20
-    deploy_service_if_needed "mongo" "docker-compose.yml" 15
+    # Deploy AI/ML services in parallel (they're independent)
+    log "Starting AI/ML services..."
+    docker-compose up -d webui whodb mongo &
+    wait
+    docker-compose up -d librechat  # LibreChat depends on mongo
     
-    # Note: Ollama is commented out in the compose file, would need to be enabled
-    # deploy_service_if_needed "ollama" "docker-compose.yml" 30
+    # Note: Ollama runs as system service
     
     success "AI/ML services deployment completed"
 }
@@ -310,15 +312,13 @@ deploy_ai_ml() {
 deploy_monitoring() {
     log "Deploying monitoring services (idempotent)..."
     
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     
-    # Deploy monitoring services
-    deploy_service_if_needed "prometheus" "docker-compose.yml" 15
-    deploy_service_if_needed "grafana" "docker-compose.yml" 15
-    deploy_service_if_needed "loki" "docker-compose.yml" 10
-    deploy_service_if_needed "uptime-kuma" "docker-compose.yml" 10
-    deploy_service_if_needed "node-exporter" "docker-compose.yml" 5
-    deploy_service_if_needed "umami" "docker-compose.yml" 10
+    # Deploy monitoring services in parallel (mostly independent)
+    log "Starting monitoring services..."
+    docker-compose up -d node-exporter vector prometheus loki uptime-kuma umami &
+    wait
+    docker-compose up -d grafana  # Grafana depends on prometheus/loki
     
     success "Monitoring services deployment completed"
 }
@@ -327,17 +327,13 @@ deploy_monitoring() {
 deploy_productivity() {
     log "Deploying productivity services (idempotent)..."
     
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     
-    # Deploy each service individually with health checks
-    deploy_service_if_needed "n8n" "docker-compose.yml" 15
-    deploy_service_if_needed "coolify" "docker-compose.yml" 20
-    deploy_service_if_needed "syncthing" "docker-compose.yml" 10
-    deploy_service_if_needed "rustdesk-hbbs" "docker-compose.yml" 10
-    deploy_service_if_needed "rustdesk-hbbr" "docker-compose.yml" 10
-    deploy_service_if_needed "homeassistant" "docker-compose.yml" 15
-    deploy_service_if_needed "huginn" "docker-compose.yml" 15
-    deploy_service_if_needed "postiz" "docker-compose.yml" 10
+    # Deploy productivity services in parallel (independent)
+    log "Starting productivity services..."
+    docker-compose up -d n8n syncthing rustdesk-hbbs rustdesk-hbbr homeassistant huginn postiz mailhog pgadmin adminer rabbitmq &
+    wait
+    docker-compose up -d coolify  # Coolify might need other services ready
     
     success "Productivity services deployment completed"
 }
@@ -346,12 +342,11 @@ deploy_productivity() {
 deploy_communication() {
     log "Deploying communication services (idempotent)..."
     
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     
-    # Deploy each service individually with health checks
-    deploy_service_if_needed "conduit" "docker-compose.yml" 15
-    deploy_service_if_needed "element" "docker-compose.yml" 10
-    deploy_service_if_needed "rustpad" "docker-compose.yml" 10
+    # Deploy communication services in parallel
+    log "Starting communication services..."
+    docker-compose up -d conduit element rustpad
     
     success "Communication services deployment completed"
 }
@@ -360,10 +355,11 @@ deploy_communication() {
 deploy_storage() {
     log "Deploying storage services (idempotent)..."
     
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     
-    # Deploy each service individually with health checks
-    deploy_service_if_needed "spacedrive" "docker-compose.yml" 10
+    # Deploy storage services
+    log "Starting storage services..."
+    docker-compose up -d spacedrive
     
     success "Storage services deployment completed"
 }
@@ -372,10 +368,10 @@ deploy_storage() {
 deploy_development() {
     log "Deploying development services (idempotent)..."
     
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     
-    # Deploy development tools
-    deploy_service_if_needed "vector" "docker-compose.yml" 10
+    # Deploy development tools (already started with monitoring)
+    log "Development services already deployed with monitoring stack"
     
     success "Development services deployment completed"
 }
@@ -384,12 +380,11 @@ deploy_development() {
 deploy_additional_services() {
     log "Deploying additional services (idempotent)..."
     
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     
-    # Deploy media and communication services
-    deploy_service_if_needed "jellyfin" "docker-compose.yml" 15
-    deploy_service_if_needed "jitsi-web" "docker-compose.yml" 20
-    deploy_service_if_needed "pihole" "docker-compose.yml" 10
+    # Deploy additional services in parallel
+    log "Starting additional services..."
+    docker-compose up -d jellyfin qdrant
     
     success "Additional services deployment completed"
 }
@@ -490,7 +485,7 @@ check_service_health() {
     local failed_services=()
     
     # Check homelab services
-    cd "$SERVICES_DIR/docker"
+    cd "$SERVICES_DIR"
     local running_services=$(docker-compose ps --services --filter "status=running" | wc -l)
     local total_services=$(docker-compose ps --services | wc -l)
     
@@ -523,74 +518,74 @@ display_service_urls() {
     log "Service URLs:"
     echo ""
     echo -e "${GREEN}=== SYSTEMD SERVICES ===${NC}"
-    echo "Ollama API: http://localhost:11434 (if installed) | https://api.leopaska.com (external)"
+    echo "Ollama API: http://localhost:11434 (if installed) | https://api.leopaska.xyz (external)"
     echo "Docker: systemctl status docker"
     echo "SSH: Port 22"
     echo ""
     echo -e "${GREEN}=== CORE INFRASTRUCTURE ===${NC}"
-    echo "Traefik Dashboard: http://localhost:8080 (local) | https://traefik.leopaska.com (external)"
+    echo "Traefik Dashboard: http://localhost:8080 (local) | https://traefik.leopaska.xyz (external)"
     echo "PostgreSQL (Homelab): localhost:5432 (local only)"
     echo "Redis (Homelab): localhost:6379 (local only)"
-    echo "MinIO Console: http://localhost:9001 (local) | https://s3-console.leopaska.com (external)"
+    echo "MinIO Console: http://localhost:9001 (local) | https://s3-console.leopaska.xyz (external)"
     echo ""
     
     echo -e "${GREEN}=== AI/ML SERVICES ===${NC}"
-    echo "OpenWebUI: http://localhost:11333 (local) | https://chat.leopaska.com (external)"
-    echo "WhoDB: http://localhost:5005 (local) | https://db-explorer.leopaska.com (external)"
-    echo "LibreChat: http://localhost:3080 (local) | https://librechat.leopaska.com (external)"
-    echo "Ollama: http://localhost:11434 (if enabled) | https://api.leopaska.com (external)"
+    echo "OpenWebUI: http://localhost:11333 (local) | https://chat.leopaska.xyz (external)"
+    echo "WhoDB: http://localhost:5005 (local) | https://db-explorer.leopaska.xyz (external)"
+    echo "LibreChat: http://localhost:3080 (local) | https://librechat.leopaska.xyz (external)"
+    echo "Ollama: http://localhost:11434 (if enabled) | https://api.leopaska.xyz (external)"
     echo ""
     
     echo -e "${GREEN}=== MONITORING ===${NC}"
-    echo "Grafana: http://localhost:3002 (local) | https://grafana.leopaska.com (external)"
-    echo "Prometheus: http://localhost:7090 (local) | https://metrics.leopaska.com (external)"
-    echo "Loki: http://localhost:7100 (local) | https://logs.leopaska.com (external)"
-    echo "Uptime Kuma: http://localhost:3001 (local) | https://status.leopaska.com (external)"
+    echo "Grafana: http://localhost:3002 (local) | https://grafana.leopaska.xyz (external)"
+    echo "Prometheus: http://localhost:7090 (local) | https://metrics.leopaska.xyz (external)"
+    echo "Loki: http://localhost:7100 (local) | https://logs.leopaska.xyz (external)"
+    echo "Uptime Kuma: http://localhost:3001 (local) | https://status.leopaska.xyz (external)"
     echo "Node Exporter: http://localhost:7101 (local only)"
-    echo "Umami Analytics: http://localhost:3006 (local) | https://analytics.leopaska.com (external)"
+    echo "Umami Analytics: http://localhost:3006 (local) | https://analytics.leopaska.xyz (external)"
     echo ""
     
     echo -e "${GREEN}=== PRODUCTIVITY TOOLS ===${NC}"
-    echo "n8n: http://localhost:5678 (local) | https://n8n.leopaska.com (external)"
-    echo "Coolify: http://localhost:8000 (local) | https://coolify.leopaska.com (external)"
-    echo "Syncthing: http://localhost:6834 (local) | https://sync.leopaska.com (external)"
-    echo "RustDesk: http://localhost:6118 (local) | https://remote.leopaska.com (external)"
-    echo "Home Assistant: http://localhost:3010 (local) | https://home.leopaska.com (external)"
-    echo "Huginn: http://localhost:3011 (local) | https://huginn.leopaska.com (external)"
-    echo "Postiz: http://localhost:3000 (local) | https://notes.leopaska.com (external)"
+    echo "n8n: http://localhost:5678 (local) | https://n8n.leopaska.xyz (external)"
+    echo "Coolify: http://localhost:8000 (local) | https://coolify.leopaska.xyz (external)"
+    echo "Syncthing: http://localhost:6834 (local) | https://sync.leopaska.xyz (external)"
+    echo "RustDesk: http://localhost:6118 (local) | https://remote.leopaska.xyz (external)"
+    echo "Home Assistant: http://localhost:3010 (local) | https://home.leopaska.xyz (external)"
+    echo "Huginn: http://localhost:3011 (local) | https://huginn.leopaska.xyz (external)"
+    echo "Postiz: http://localhost:3000 (local) | https://notes.leopaska.xyz (external)"
     echo ""
     
     echo -e "${GREEN}=== COMMUNICATION ===${NC}"
-    echo "Matrix (Conduit): http://localhost:6167 (local) | https://matrix.leopaska.com (external)"
-    echo "Element: http://localhost:6099 (local) | https://chat-matrix.leopaska.com (external)"
-    echo "RustPad: http://localhost:3030 (local) | https://pad.leopaska.com (external)"
+    echo "Matrix (Conduit): http://localhost:6167 (local) | https://matrix.leopaska.xyz (external)"
+    echo "Element: http://localhost:6099 (local) | https://chat-matrix.leopaska.xyz (external)"
+    echo "RustPad: http://localhost:3030 (local) | https://pad.leopaska.xyz (external)"
     echo ""
     
     echo -e "${GREEN}=== SECURITY ===${NC}"
-    echo "Authelia: http://localhost:9091 (local) | https://auth.leopaska.com (external)"
-    echo "Vaultwarden: http://localhost:80 (local) | https://vault.leopaska.com (external)"
+    echo "Authelia: http://localhost:9091 (local) | https://auth.leopaska.xyz (external)"
+    echo "Vaultwarden: http://localhost:80 (local) | https://vault.leopaska.xyz (external)"
     echo ""
     
     echo -e "${GREEN}=== STORAGE ===${NC}"
-    echo "SpaceDrive: http://localhost:8081 (local) | https://drive.leopaska.com (external)"
+    echo "SpaceDrive: http://localhost:8081 (local) | https://drive.leopaska.xyz (external)"
     echo ""
     
     echo -e "${GREEN}=== MEDIA & COMMUNICATION ===${NC}"
-    echo "Jellyfin: http://localhost:8096 (local) | https://media.leopaska.com (external)"
-    echo "Jitsi Meet: http://localhost:8083 (local) | https://meet.leopaska.com (external)"
+    echo "Jellyfin: http://localhost:8096 (local) | https://media.leopaska.xyz (external)"
+    echo "Jitsi Meet: http://localhost:8083 (local) | https://meet.leopaska.xyz (external)"
     echo "Pi-hole: http://localhost:8082 (local only)"
     echo ""
     
     echo -e "${GREEN}=== DEVELOPMENT TOOLS ===${NC}"
-    echo "Adminer: http://localhost:8084 (local) | https://admin.leopaska.com (external)"
-    echo "Redis Commander: http://localhost:8085 (local) | https://redis-admin.leopaska.com (external)"
-    echo "PgAdmin: http://localhost:8086 (local) | https://pgadmin.leopaska.com (external)"
-    echo "LocalStack: http://localhost:4566 (local) | https://localstack.leopaska.com (external)"
-    echo "Jaeger: http://localhost:16686 (local) | https://jaeger.leopaska.com (external)"
+    echo "Adminer: http://localhost:8084 (local) | https://admin.leopaska.xyz (external)"
+    echo "Redis Commander: http://localhost:8085 (local) | https://redis-admin.leopaska.xyz (external)"
+    echo "PgAdmin: http://localhost:8086 (local) | https://pgadmin.leopaska.xyz (external)"
+    echo "LocalStack: http://localhost:4566 (local) | https://localstack.leopaska.xyz (external)"
+    echo "Jaeger: http://localhost:16686 (local) | https://jaeger.leopaska.xyz (external)"
     echo ""
     
     echo -e "${GREEN}=== PRODUCTION PROJECTS ===${NC}"
-    echo "DiscoverLocal AI: http://localhost:3005 (local) | https://discoverlocal.leopaska.com (external)"
+    echo "DiscoverLocal AI: http://localhost:3005 (local) | https://discoverlocal.leopaska.xyz (external)"
     echo "HyvaPaska: http://localhost:3003 (local) | https://hyvapaska.com (external)"
     echo "Potluck: http://localhost:8100 (local) | https://potluck.pub (external)"
     echo "TheBlink Live: http://localhost:3004 (local) | https://theblink.live (external)"
@@ -693,7 +688,7 @@ case "${1:-}" in
         ;;
     "--clean")
         log "Cleaning up all services..."
-        cd "$SERVICES_DIR/docker" && docker-compose down
+        cd "$SERVICES_DIR" && docker-compose down
         for project in "${!PRODUCTION_PROJECTS[@]}"; do
             project_dir="$PRODUCTION_DIR/$project"
             if [[ -d "$project_dir" && -f "$project_dir/docker-compose.yml" ]]; then

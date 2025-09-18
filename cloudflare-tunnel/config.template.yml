@@ -1,0 +1,170 @@
+tunnel: 8a8129e7-f8c3-4cc4-8b1f-9995da97fff0
+credentials-file: /home/l3o/git/homelab/services/cloudflare-tunnel/credentials.json
+
+# Template for homelab services - variables will be substituted
+ingress:
+  # === ADMIN & MONITORING SERVICES ===
+  
+  # Main homelab dashboard (Traefik)
+  - hostname: traefik.{{DOMAIN}}
+    service: http://localhost:8080
+    originRequest:
+      httpHostHeader: traefik.{{DOMAIN}}
+
+  # Infrastructure monitoring (via Traefik)
+  - hostname: grafana.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: grafana.{{DOMAIN}}
+
+  - hostname: prometheus.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: prometheus.{{DOMAIN}}
+
+  - hostname: uptimekuma.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: uptimekuma.{{DOMAIN}}
+
+  - hostname: loki.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: loki.{{DOMAIN}}
+
+  - hostname: nodeexporter.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: nodeexporter.{{DOMAIN}}
+
+  # === PRODUCTIVITY & AUTOMATION ===
+  
+  - hostname: n8n.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: n8n.{{DOMAIN}}
+
+  - hostname: coolify.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: coolify.{{DOMAIN}}
+
+  - hostname: homeassistant.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: homeassistant.{{DOMAIN}}
+
+  - hostname: huginn.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: huginn.{{DOMAIN}}
+
+  - hostname: postiz.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: postiz.{{DOMAIN}}
+
+  # === AI/ML SERVICES ===
+  
+  - hostname: ollama.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: ollama.{{DOMAIN}}
+
+  - hostname: librechat.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: librechat.{{DOMAIN}}
+
+  - hostname: openwebui.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: openwebui.{{DOMAIN}}
+
+  - hostname: umami.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: umami.{{DOMAIN}}
+
+  # === STORAGE & DATA ===
+  
+  - hostname: minio.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: minio.{{DOMAIN}}
+
+  - hostname: whodb.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: whodb.{{DOMAIN}}
+
+  - hostname: pgadmin.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: pgadmin.{{DOMAIN}}
+
+  - hostname: adminer.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: adminer.{{DOMAIN}}
+
+  - hostname: syncthing.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: syncthing.{{DOMAIN}}
+
+  - hostname: spacedrive.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: spacedrive.{{DOMAIN}}
+
+  # === COMMUNICATION ===
+  
+  - hostname: conduit.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: conduit.{{DOMAIN}}
+
+  - hostname: element.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: element.{{DOMAIN}}
+
+  - hostname: rustpad.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: rustpad.{{DOMAIN}}
+
+  - hostname: mailhog.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: mailhog.{{DOMAIN}}
+
+  # === MEDIA & CONTENT ===
+  
+  - hostname: jellyfin.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: jellyfin.{{DOMAIN}}
+
+  # === INFRASTRUCTURE ===
+  
+  - hostname: rabbitmq.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: rabbitmq.{{DOMAIN}}
+
+  # === SECURITY & AUTH ===
+  
+  - hostname: authelia.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: authelia.{{DOMAIN}}
+
+  - hostname: vaultwarden.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: vaultwarden.{{DOMAIN}}
+
+  # Catch-all rule (must be last)
+  - service: http_status:404

@@ -1,0 +1,131 @@
+tunnel: 8a8129e7-f8c3-4cc4-8b1f-9995da97fff0
+credentials-file: /home/l3o/git/homelab/cloudflare-tunnel/credentials.json
+
+# Ingress rules for leopaska.xyz homelab services
+ingress:
+  # === ADMIN & MONITORING SERVICES ===
+  
+  # Main homelab dashboard (Traefik)
+  - hostname: traefik.leopaska.xyz
+    service: http://localhost:8080
+    originRequest:
+      httpHostHeader: traefik.leopaska.xyz
+
+  # Infrastructure monitoring
+  - hostname: grafana.leopaska.xyz
+    service: http://localhost:3000
+    originRequest:
+      httpHostHeader: grafana.leopaska.xyz
+
+  - hostname: prometheus.leopaska.xyz
+    service: http://localhost:7090
+    originRequest:
+      httpHostHeader: prometheus.leopaska.xyz
+
+  - hostname: uptimekuma.leopaska.xyz
+    service: http://localhost:3001
+    originRequest:
+      httpHostHeader: uptimekuma.leopaska.xyz
+
+  - hostname: loki.leopaska.xyz
+    service: http://localhost:7100
+    originRequest:
+      httpHostHeader: loki.leopaska.xyz
+
+  # === PRODUCTIVITY & AUTOMATION ===
+  
+  - hostname: n8n.leopaska.xyz
+    service: http://localhost:5678
+    originRequest:
+      httpHostHeader: n8n.leopaska.xyz
+
+  - hostname: coolify.leopaska.xyz
+    service: http://localhost:8000
+    originRequest:
+      httpHostHeader: coolify.leopaska.xyz
+
+  - hostname: homeassistant.leopaska.xyz
+    service: http://localhost:3010
+    originRequest:
+      httpHostHeader: homeassistant.leopaska.xyz
+
+  - hostname: huginn.leopaska.xyz
+    service: http://localhost:3011
+    originRequest:
+      httpHostHeader: huginn.leopaska.xyz
+
+  - hostname: postiz.leopaska.xyz
+    service: http://localhost:3000
+    originRequest:
+      httpHostHeader: postiz.leopaska.xyz
+
+  # === AI/ML SERVICES ===
+  
+  - hostname: ollama.leopaska.xyz
+    service: http://localhost:11333
+    originRequest:
+      httpHostHeader: ollama.leopaska.xyz
+
+  - hostname: librechat.leopaska.xyz
+    service: http://localhost:3080
+    originRequest:
+      httpHostHeader: librechat.leopaska.xyz
+
+  - hostname: umami.leopaska.xyz
+    service: http://localhost:3006
+    originRequest:
+      httpHostHeader: umami.leopaska.xyz
+
+  # === STORAGE & DATA ===
+  
+  - hostname: minio.leopaska.xyz
+    service: http://localhost:9001
+    originRequest:
+      httpHostHeader: minio.leopaska.xyz
+
+  - hostname: whodb.leopaska.xyz
+    service: http://localhost:5005
+    originRequest:
+      httpHostHeader: whodb.leopaska.xyz
+
+  - hostname: syncthing.leopaska.xyz
+    service: http://localhost:6834
+    originRequest:
+      httpHostHeader: syncthing.leopaska.xyz
+
+  - hostname: spacedrive.leopaska.xyz
+    service: http://localhost:8081
+    originRequest:
+      httpHostHeader: spacedrive.leopaska.xyz
+
+  # === COMMUNICATION ===
+  
+  - hostname: conduit.leopaska.xyz
+    service: http://localhost:6167
+    originRequest:
+      httpHostHeader: conduit.leopaska.xyz
+
+  - hostname: element.leopaska.xyz
+    service: http://localhost:6099
+    originRequest:
+      httpHostHeader: element.leopaska.xyz
+
+  - hostname: rustpad.leopaska.xyz
+    service: http://localhost:3030
+    originRequest:
+      httpHostHeader: rustpad.leopaska.xyz
+
+  # === SECURITY & AUTH ===
+  
+  - hostname: authelia.leopaska.xyz
+    service: http://localhost:9091
+    originRequest:
+      httpHostHeader: authelia.leopaska.xyz
+
+  - hostname: vaultwarden.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: vaultwarden.leopaska.xyz
+
+  # Catch-all rule (must be last)
+  - service: http_status:404

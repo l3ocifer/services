@@ -1,0 +1,66 @@
+data_dir: /var/lib/vector
+
+# Sources
+sources:
+  docker_logs:
+    type: docker_logs
+    include_images:
+      - "*"
+    exclude_images:
+      - "vector*"
+    
+  system_metrics:
+    type: host_metrics
+    collectors:
+      - cpu
+      - memory
+      - disk
+      - network
+    scrape_interval_secs: 30
+
+# Transforms
+transforms:
+  parse_docker_logs:
+    type: remap
+    inputs:
+      - docker_logs
+    source: |
+      .timestamp = now()
+      .service = .label."com.docker.compose.service" || .container_name
+      .level = "info"
+      if match(.message, r"(?i)(error|err|exception|fail)") {
+        .level = "error"
+      } else if match(.message, r"(?i)(warn|warning)") {
+        .level = "warn"
+      } else if match(.message, r"(?i)(debug)") {
+        .level = "debug"
+      }
+
+# Sinks
+sinks:
+  loki_logs:
+    type: loki
+    inputs:
+      - parse_docker_logs
+    endpoint: http://loki:3100
+    labels:
+      service: "{{ service }}"
+      level: "{{ level }}"
+    encoding:
+      codec: json
+
+  file_metrics:
+    type: file
+    inputs:
+      - system_metrics
+    path: /var/lib/vector/metrics.log
+    encoding:
+      codec: json
+
+  console_debug:
+    type: console
+    inputs:
+      - parse_docker_logs
+    encoding:
+      codec: json
+    target: stdout

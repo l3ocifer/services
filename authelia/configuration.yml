@@ -1,0 +1,35 @@
+---
+server:
+  address: 'tcp://:9091/'
+
+log:
+  level: 'debug'
+
+identity_validation:
+  reset_password:
+    jwt_secret: 'antidisestablishmentarianism7'
+
+authentication_backend:
+  file:
+    path: '/config/users_database.yml'
+
+session:
+  secret: 'antidisestablishmentarianism7'
+  cookies:
+    - name: 'authelia_session'
+      domain: 'leopaska.xyz'
+      authelia_url: 'https://authelia.leopaska.xyz'
+
+storage:
+  encryption_key: 'antidisestablishmentarianism7'
+  postgres:
+    address: 'tcp://neon-postgres:5432'
+    database: 'authelia'
+    username: 'postgres'
+
+access_control:
+  default_policy: 'one_factor'
+
+notifier:
+  filesystem:
+    filename: '/config/notification.txt'

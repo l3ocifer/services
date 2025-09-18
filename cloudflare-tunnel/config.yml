@@ -1,0 +1,170 @@
+tunnel: 8a8129e7-f8c3-4cc4-8b1f-9995da97fff0
+credentials-file: /home/l3o/git/homelab/services/cloudflare-tunnel/credentials.json
+
+# Template for homelab services - variables will be substituted
+ingress:
+  # === ADMIN & MONITORING SERVICES ===
+  
+  # Main homelab dashboard (Traefik)
+  - hostname: traefik.leopaska.xyz
+    service: http://localhost:8080
+    originRequest:
+      httpHostHeader: traefik.leopaska.xyz
+
+  # Infrastructure monitoring (via Traefik)
+  - hostname: grafana.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: grafana.leopaska.xyz
+
+  - hostname: prometheus.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: prometheus.leopaska.xyz
+
+  - hostname: uptimekuma.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: uptimekuma.leopaska.xyz
+
+  - hostname: loki.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: loki.leopaska.xyz
+
+  - hostname: nodeexporter.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: nodeexporter.leopaska.xyz
+
+  # === PRODUCTIVITY & AUTOMATION ===
+  
+  - hostname: n8n.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: n8n.leopaska.xyz
+
+  - hostname: coolify.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: coolify.leopaska.xyz
+
+  - hostname: homeassistant.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: homeassistant.leopaska.xyz
+
+  - hostname: huginn.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: huginn.leopaska.xyz
+
+  - hostname: postiz.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: postiz.leopaska.xyz
+
+  # === AI/ML SERVICES ===
+  
+  - hostname: ollama.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: ollama.leopaska.xyz
+
+  - hostname: librechat.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: librechat.leopaska.xyz
+
+  - hostname: openwebui.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: openwebui.leopaska.xyz
+
+  - hostname: umami.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: umami.leopaska.xyz
+
+  # === STORAGE & DATA ===
+  
+  - hostname: minio.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: minio.leopaska.xyz
+
+  - hostname: whodb.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: whodb.leopaska.xyz
+
+  - hostname: pgadmin.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: pgadmin.leopaska.xyz
+
+  - hostname: adminer.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: adminer.leopaska.xyz
+
+  - hostname: syncthing.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: syncthing.leopaska.xyz
+
+  - hostname: spacedrive.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: spacedrive.leopaska.xyz
+
+  # === COMMUNICATION ===
+  
+  - hostname: conduit.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: conduit.leopaska.xyz
+
+  - hostname: element.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: element.leopaska.xyz
+
+  - hostname: rustpad.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: rustpad.leopaska.xyz
+
+  - hostname: mailhog.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: mailhog.leopaska.xyz
+
+  # === MEDIA & CONTENT ===
+  
+  - hostname: jellyfin.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: jellyfin.leopaska.xyz
+
+  # === INFRASTRUCTURE ===
+  
+  - hostname: rabbitmq.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: rabbitmq.leopaska.xyz
+
+  # === SECURITY & AUTH ===
+  
+  - hostname: authelia.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: authelia.leopaska.xyz
+
+  - hostname: vaultwarden.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: vaultwarden.leopaska.xyz
+
+  # Catch-all rule (must be last)
+  - service: http_status:404
