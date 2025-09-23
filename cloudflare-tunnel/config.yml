@@ -166,5 +166,12 @@ ingress:
     originRequest:
       httpHostHeader: vaultwarden.leopaska.xyz
 
+  # === REMOTE ACCESS ===
+
+  - hostname: rustdesk.leopaska.xyz
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: rustdesk.leopaska.xyz
+
   # Catch-all rule (must be last)
   - service: http_status:404

@@ -166,5 +166,12 @@ ingress:
     originRequest:
       httpHostHeader: vaultwarden.{{DOMAIN}}
 
+  # === REMOTE ACCESS ===
+
+  - hostname: rustdesk.{{DOMAIN}}
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: rustdesk.{{DOMAIN}}
+
   # Catch-all rule (must be last)
   - service: http_status:404

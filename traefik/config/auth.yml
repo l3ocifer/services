@@ -40,6 +40,20 @@ http:
         customFrameOptionsValue: "SAMEORIGIN"
         customRequestHeaders:
           X-Forwarded-Proto: "https"
+
+    # Security headers for CloudFlare tunnel (no SSL redirect)
+    security-tunnel:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
     
     # Local network only access
     local-only:
