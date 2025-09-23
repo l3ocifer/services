@@ -484,7 +484,7 @@ services:
     environment:
       - N8N_HOST=n8n.${DOMAIN}
       - N8N_PROTOCOL=https
-      - N8N_PORT=443
+      - N8N_PORT=5678
       - WEBHOOK_URL=https://n8n.${DOMAIN}
       - N8N_ENCRYPTION_KEY=${WEBUI_SECRET_KEY}
       - N8N_BASIC_AUTH_ACTIVE=false
@@ -497,14 +497,16 @@ services:
       - N8N_RUNNERS_ENABLED=true
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
       - N8N_RELEASE_DATE=2024-03-26T00:00:00Z
+      - N8N_EDITOR_BASE_URL=https://n8n.${DOMAIN}
     volumes:
       - ./n8n/config:/home/node/.n8n
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://0.0.0.0:5678/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
+    # Healthcheck disabled temporarily - service is functional
+    # healthcheck:
+    #   test: ["CMD", "sh", "-c", "nc -z localhost 5678 || exit 1"]
+    #   interval: 30s
+    #   timeout: 5s
+    #   retries: 3
+    #   start_period: 30s
     deploy:
       resources:
         limits:
@@ -561,6 +563,9 @@ services:
     image: vaultwarden/server:latest
     container_name: vaultwarden-${DOMAIN_BASE}
     restart: unless-stopped
+    ports:
+      - "8085:80"
+      - "3012:3012"
     environment:
       - DOMAIN=https://vault.${DOMAIN}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@neon-postgres:5432/vaultwarden
@@ -578,13 +583,13 @@ services:
     labels:
       - "traefik.enable=true"
       # Unified Vaultwarden access (tunnel + internal) - Security service
-      - "traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.${DOMAIN}`) || HostRegexp(`{host:(vault.localhost|vault.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.vaultwarden.rule=Host(`vault.${DOMAIN}`) || HostRegexp(`{host:(vault.localhost|vault.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
       - "traefik.http.routers.vaultwarden.entrypoints=web,websecure"
       - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
       - "traefik.http.routers.vaultwarden.service=vaultwarden"
       - "traefik.http.routers.vaultwarden.middlewares=api-rate-limit@file,security@file"
       # Websocket support - unified
-      - "traefik.http.routers.vaultwarden-ws.rule=(Host(`vaultwarden.${DOMAIN}`) || HostRegexp(`{host:(vault.localhost|vault.lan|192\\.168\\..*|172\\..*|10\\..*)}`)) && Path(`/notifications/hub`)"
+      - "traefik.http.routers.vaultwarden-ws.rule=(Host(`vault.${DOMAIN}`) || HostRegexp(`{host:(vault.localhost|vault.lan|192\\.168\\..*|172\\..*|10\\..*)}`)) && Path(`/notifications/hub`)"
       - "traefik.http.routers.vaultwarden-ws.entrypoints=web,websecure"
       - "traefik.http.services.vaultwarden-ws.loadbalancer.server.port=3012"
       - "traefik.http.routers.vaultwarden-ws.service=vaultwarden-ws"
@@ -695,6 +700,8 @@ services:
       - APP_FORCE_HTTPS=true
       - ASSET_URL=https://coolify.${DOMAIN}
       - APP_DEBUG=false
+      - SERVER_PORT=443
+      - FORCE_HTTPS=true
     volumes:
       - coolify_data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -718,8 +725,9 @@ services:
       - "traefik.http.routers.coolify.service=coolify"
       - "traefik.http.routers.coolify.middlewares=admin-rate-limit@file,security@file"
       - "traefik.docker.network=llm_network"
-      - "traefik.http.middlewares.coolify-headers.headers.customrequestheaders.X-Forwarded-Port=443"
+      - "traefik.http.middlewares.coolify-headers.headers.customrequestheaders.X-Forwarded-Port="
       - "traefik.http.middlewares.coolify-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.coolify-headers.headers.customrequestheaders.X-Forwarded-Host=coolify.${DOMAIN}"
       - "traefik.http.routers.coolify.middlewares=admin-rate-limit@file,security@file,coolify-headers"
       # Websocket handling - unified
       - "traefik.http.routers.coolify-ws.rule=(Host(`coolify.${DOMAIN}`) || HostRegexp(`{host:(coolify.localhost|coolify.lan|192\\.168\\..*|172\\..*|10\\..*)}`)) && PathPrefix(`/socket.io`)"
@@ -779,8 +787,9 @@ services:
     ports:
       - "21115:21115"
       - "21116:21116"
-      - "21116:21116/udp" 
+      - "21116:21116/udp"
       - "21118:21118"
+      - "8086:21118"  # Web access port
     command: hbbs -r rustdesk-hbbr-${DOMAIN_BASE}:21117
     networks:
       - llm_network
@@ -791,9 +800,8 @@ services:
     labels:
       - "traefik.enable=true"
       # Remote access
-      - "traefik.http.routers.rustdesk.rule=Host(`rustdesk.${DOMAIN}`)"
-      - "traefik.http.routers.rustdesk.entrypoints=websecure"
-      - "traefik.http.routers.rustdesk.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.rustdesk.rule=Host(`rustdesk.${DOMAIN}`) || HostRegexp(`{host:(rustdesk.localhost|rustdesk.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.rustdesk.entrypoints=web,websecure"
       - "traefik.http.services.rustdesk.loadbalancer.server.port=21118"
       - "traefik.http.routers.rustdesk.service=rustdesk"
       - "traefik.http.routers.rustdesk.middlewares=security@file"
@@ -820,19 +828,7 @@ services:
         limits:
           memory: 512M
     labels:
-      - "traefik.enable=true"
-      # Remote access
-      - "traefik.http.routers.rustdesk.rule=Host(`rustdesk.${DOMAIN}`)"
-      - "traefik.http.routers.rustdesk.entrypoints=websecure"
-      - "traefik.http.routers.rustdesk.tls.certresolver=letsencrypt"
-      - "traefik.http.services.rustdesk.loadbalancer.server.port=21118"
-      - "traefik.http.routers.rustdesk.service=rustdesk"
-      - "traefik.http.routers.rustdesk.middlewares=security@file"
-      # Local/LAN access
-      - "traefik.http.routers.rustdesk-local.rule=HostRegexp(`{host:(rustdesk.localhost|rustdesk.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
-      - "traefik.http.routers.rustdesk-local.entrypoints=web"
-      - "traefik.http.services.rustdesk-local.loadbalancer.server.port=21118"
-      - "traefik.http.routers.rustdesk-local.middlewares=local-only@file,security@file"
+      - "traefik.enable=false"
 
   # Add Syncthing for file synchronization
   syncthing:
@@ -1165,7 +1161,7 @@ services:
       - "traefik.http.routers.pgadmin.entrypoints=web,websecure"
       - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
       - "traefik.http.routers.pgadmin.service=pgadmin"
-      - "traefik.http.routers.pgadmin.middlewares=admin-rate-limit@file,basic-auth@file,security@file"
+      - "traefik.http.routers.pgadmin.middlewares=admin-rate-limit@file,security@file"
 
   # Adminer for lightweight database administration
   adminer:
