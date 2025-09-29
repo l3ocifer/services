@@ -3,15 +3,45 @@ credentials-file: /home/l3o/git/homelab/services/cloudflare-tunnel/credentials.j
 
 # Template for homelab services - variables will be substituted
 ingress:
-  # === ADMIN & MONITORING SERVICES ===
+  # === K3S SERVICES (Route to K3s Traefik) ===
   
-  # Main homelab dashboard (Traefik)
+  # ArgoCD (K3s GitOps)
+  - hostname: argocd.{{DOMAIN}}
+    service: http://192.168.1.200:32251
+    originRequest:
+      httpHostHeader: argocd.{{DOMAIN}}
+
+  # Localist AI (K3s Production App)  
+  - hostname: localist.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: localist.{{DOMAIN}}
+
+  # K3s-specific monitoring services
+  - hostname: grafana-k3s.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: grafana-k3s.{{DOMAIN}}
+
+  - hostname: prometheus-k3s.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: prometheus-k3s.{{DOMAIN}}
+
+  - hostname: traefik-k3s.{{DOMAIN}}
+    service: http://localhost:30808
+    originRequest:
+      httpHostHeader: traefik-k3s.{{DOMAIN}}
+
+  # === DOCKER SERVICES (Route to Docker Traefik) ===
+  
+  # Main homelab dashboard (Docker Traefik)
   - hostname: traefik.{{DOMAIN}}
     service: http://localhost:8080
     originRequest:
       httpHostHeader: traefik.{{DOMAIN}}
 
-  # Infrastructure monitoring (via Traefik)
+  # Infrastructure monitoring (via Docker Traefik)
   - hostname: grafana.{{DOMAIN}}
     service: http://localhost:80
     originRequest:
@@ -21,7 +51,6 @@ ingress:
     service: http://localhost:80
     originRequest:
       httpHostHeader: prometheus.{{DOMAIN}}
-
   - hostname: uptimekuma.{{DOMAIN}}
     service: http://localhost:80
     originRequest:
@@ -172,6 +201,64 @@ ingress:
     service: http://localhost:80
     originRequest:
       httpHostHeader: rustdesk.{{DOMAIN}}
+
+  # === INFRASTRUCTURE SERVICES (K3S) ===
+  
+  # IPFS Gateway
+  - hostname: ipfs.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: ipfs.{{DOMAIN}}
+
+  # RTMP Streaming Ingestion (for streamers publishing)
+  - hostname: rtmp.{{DOMAIN}}
+    service: tcp://localhost:31935
+    originRequest:
+      noTLSVerify: true
+
+  # HLS Playback (for viewers watching)
+  - hostname: live.{{DOMAIN}}
+    service: http://localhost:30880
+    originRequest:
+      httpHostHeader: live.{{DOMAIN}}
+
+  # === PRODUCTION APPLICATIONS (K3S) ===
+  
+  # American Enlightenment
+  - hostname: ae.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: ae.{{DOMAIN}}
+
+  # Potluck Pub
+  - hostname: potluck.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: potluck.{{DOMAIN}}
+
+  # TheBlink Live
+  - hostname: blink.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: blink.{{DOMAIN}}
+
+  # HyvaPaska
+  - hostname: hyva.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: hyva.{{DOMAIN}}
+
+  # Ursulai
+  - hostname: ursulai.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: ursulai.{{DOMAIN}}
+
+  # OmniLemma
+  - hostname: omni.{{DOMAIN}}
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: omni.{{DOMAIN}}
 
   # Catch-all rule (must be last)
   - service: http_status:404

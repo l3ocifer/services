@@ -3,15 +3,45 @@ credentials-file: /home/l3o/git/homelab/services/cloudflare-tunnel/credentials.j
 
 # Template for homelab services - variables will be substituted
 ingress:
-  # === ADMIN & MONITORING SERVICES ===
+  # === K3S SERVICES (Route to K3s Traefik) ===
   
-  # Main homelab dashboard (Traefik)
+  # ArgoCD (K3s GitOps)
+  - hostname: argocd.leopaska.xyz
+    service: http://192.168.1.200:32251
+    originRequest:
+      httpHostHeader: argocd.leopaska.xyz
+
+  # Localist AI (K3s Production App)  
+  - hostname: localist.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: localist.leopaska.xyz
+
+  # K3s-specific monitoring services
+  - hostname: grafana-k3s.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: grafana-k3s.leopaska.xyz
+
+  - hostname: prometheus-k3s.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: prometheus-k3s.leopaska.xyz
+
+  - hostname: traefik-k3s.leopaska.xyz
+    service: http://localhost:30808
+    originRequest:
+      httpHostHeader: traefik-k3s.leopaska.xyz
+
+  # === DOCKER SERVICES (Route to Docker Traefik) ===
+  
+  # Main homelab dashboard (Docker Traefik)
   - hostname: traefik.leopaska.xyz
     service: http://localhost:8080
     originRequest:
       httpHostHeader: traefik.leopaska.xyz
 
-  # Infrastructure monitoring (via Traefik)
+  # Infrastructure monitoring (via Docker Traefik)
   - hostname: grafana.leopaska.xyz
     service: http://localhost:80
     originRequest:
@@ -21,7 +51,6 @@ ingress:
     service: http://localhost:80
     originRequest:
       httpHostHeader: prometheus.leopaska.xyz
-
   - hostname: uptimekuma.leopaska.xyz
     service: http://localhost:80
     originRequest:
@@ -172,6 +201,64 @@ ingress:
     service: http://localhost:80
     originRequest:
       httpHostHeader: rustdesk.leopaska.xyz
+
+  # === INFRASTRUCTURE SERVICES (K3S) ===
+  
+  # IPFS Gateway
+  - hostname: ipfs.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: ipfs.leopaska.xyz
+
+  # RTMP Streaming Ingestion (for streamers publishing)
+  - hostname: rtmp.leopaska.xyz
+    service: tcp://localhost:31935
+    originRequest:
+      noTLSVerify: true
+
+  # HLS Playback (for viewers watching)
+  - hostname: live.leopaska.xyz
+    service: http://localhost:30880
+    originRequest:
+      httpHostHeader: live.leopaska.xyz
+
+  # === PRODUCTION APPLICATIONS (K3S) ===
+  
+  # American Enlightenment
+  - hostname: ae.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: ae.leopaska.xyz
+
+  # Potluck Pub
+  - hostname: potluck.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: potluck.leopaska.xyz
+
+  # TheBlink Live
+  - hostname: blink.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: blink.leopaska.xyz
+
+  # HyvaPaska
+  - hostname: hyva.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: hyva.leopaska.xyz
+
+  # Ursulai
+  - hostname: ursulai.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: ursulai.leopaska.xyz
+
+  # OmniLemma
+  - hostname: omni.leopaska.xyz
+    service: http://localhost:30080
+    originRequest:
+      httpHostHeader: omni.leopaska.xyz
 
   # Catch-all rule (must be last)
   - service: http_status:404
