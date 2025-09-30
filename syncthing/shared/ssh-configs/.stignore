@@ -1,0 +1,27 @@
+# SSH Configuration Sync - Self-Hosted Security
+# Since we control our own Syncthing, we CAN sync private keys safely
+# This enables true development environment synchronization
+
+# Allow ALL SSH files including private keys
+!id_rsa
+!id_dsa
+!id_ecdsa
+!id_ed25519
+!*_rsa
+!*_dsa
+!*_ecdsa
+!*_ed25519
+!*.pem
+!*.pub
+!config
+!authorized_keys
+!known_hosts
+
+# Only exclude temporary and backup files
+*.tmp
+*.old
+*.bak
+*.backup
+*~
+.#*
+*.swp

@@ -1,0 +1,44 @@
+# Dotfiles Sync - Ignore Patterns
+# Sync shell configurations and dotfiles safely
+
+# Include common dotfiles
+!.zshrc
+!.bashrc  
+!.bash_profile
+!.profile
+!.gitconfig
+!.gitignore_global
+!.vimrc
+!.tmux.conf
+!.screenrc
+
+# Allow sensitive files in self-hosted environment
+!.ssh/id_*
+!.ssh/known_hosts
+!.aws/credentials
+!.aws/config
+!.docker/config.json
+!.kube/config
+
+# Exclude cache and temporary files
+.zsh_history
+.bash_history
+.viminfo
+.lesshst
+.recently-used*
+.cache/
+.local/
+
+# Exclude OS-specific files
+.DS_Store
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+
+# Exclude editor/IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

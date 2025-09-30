@@ -396,7 +396,7 @@ services:
       - "traefik.http.routers.grafana.entrypoints=web,websecure"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
       - "traefik.http.routers.grafana.service=grafana"
-      - "traefik.http.routers.grafana.middlewares=admin-rate-limit@file,conditional-auth@file,security@file"
+      - "traefik.http.routers.grafana.middlewares=admin-rate-limit@file,basic-auth@file,security@file"
 
   # Add Loki for log aggregation
   loki:
@@ -486,7 +486,7 @@ services:
       - N8N_PROTOCOL=https
       - N8N_PORT=5678
       - WEBHOOK_URL=https://n8n.${DOMAIN}
-      - N8N_ENCRYPTION_KEY=${WEBUI_SECRET_KEY}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - N8N_BASIC_AUTH_ACTIVE=false
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=neon-postgres
@@ -498,6 +498,13 @@ services:
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
       - N8N_RELEASE_DATE=2024-03-26T00:00:00Z
       - N8N_EDITOR_BASE_URL=https://n8n.${DOMAIN}
+      - N8N_METRICS=true
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - WEBHOOK_TUNNEL_URL=https://n8n.${DOMAIN}
+      - N8N_PAYLOAD_SIZE_MAX=16
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - N8N_SECURE_COOKIE=false
     volumes:
       - ./n8n/config:/home/node/.n8n
     # Healthcheck disabled temporarily - service is functional
@@ -830,22 +837,41 @@ services:
     labels:
       - "traefik.enable=false"
 
-  # Add Syncthing for file synchronization
+  # Syncthing for development environment synchronization
   syncthing:
     image: syncthing/syncthing:latest
     container_name: syncthing-${DOMAIN_BASE}
+    hostname: homelab-server
     restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ:-UTC}
     volumes:
+      # Syncthing config and database
       - syncthing_data:/var/syncthing
+      
+      # Development environment sync folders
+      - ${DATA_DIR:-/media/l3o/prod/docker}/syncthing/shared/dotfiles:/data/dotfiles
+      - ${DATA_DIR:-/media/l3o/prod/docker}/syncthing/shared/scripts:/data/scripts
+      - ${DATA_DIR:-/media/l3o/prod/docker}/syncthing/shared/ssh-configs:/data/ssh-configs
+      - ${DATA_DIR:-/media/l3o/prod/docker}/syncthing/shared/git-configs:/data/git-configs
+      - ${DATA_DIR:-/media/l3o/prod/docker}/syncthing/shared/dev-tools:/data/dev-tools
+      
+      # Read-only mounts for source directories (optional - for easy access)
+      - /home/l3o/.scripts:/source/scripts:ro
+      - /home/l3o/.ssh:/source/ssh:ro
     ports:
-      - "8384:8384"
-      - "22000:22000"
-      - "22000:22000/udp"
-      - "21027:21027/udp"
+      - "8384:8384"   # Web UI
+      - "22000:22000/tcp"  # File transfers
+      - "22000:22000/udp"  # File transfers
+      - "21027:21027/udp"  # Local discovery
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1G
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "http://localhost:8384/"]
       interval: 60s
@@ -856,7 +882,7 @@ services:
       - llm_network
     labels:
       - "traefik.enable=true"
-      # Unified Syncthing access (tunnel + internal) - Sync service
+      # Unified Syncthing access (tunnel + internal) - Development sync service
       - "traefik.http.routers.syncthing.rule=Host(`syncthing.${DOMAIN}`) || HostRegexp(`{host:(sync.localhost|sync.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
       - "traefik.http.routers.syncthing.entrypoints=web,websecure"
       - "traefik.http.services.syncthing.loadbalancer.server.port=8384"
@@ -876,9 +902,9 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - MAIN_URL=https://notes.${DOMAIN}
-      - FRONTEND_URL=https://notes.${DOMAIN}
-      - NEXT_PUBLIC_BACKEND_URL=https://notes.${DOMAIN}/api
+      - MAIN_URL=https://postiz.${DOMAIN}
+      - FRONTEND_URL=https://postiz.${DOMAIN}
+      - NEXT_PUBLIC_BACKEND_URL=https://postiz.${DOMAIN}/api
       - JWT_SECRET=${POSTIZ_JWT_SECRET}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@neon-postgres:5432/postiz
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
@@ -1268,6 +1294,112 @@ services:
       - "traefik.http.routers.umami.service=umami"
       - "traefik.http.routers.umami.middlewares=api-rate-limit@file,security@file"
 
+  # MCP Modules Rust Server
+  mcp-modules-rust:
+    build:
+      context: https://github.com/l3ocifer/mcp-modules-rust.git
+      dockerfile: Dockerfile
+    container_name: mcp-modules-rust-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "8890:8890"
+    environment:
+      - MCP_HTTP_HOST=0.0.0.0
+      - MCP_HTTP_PORT=8890
+      - RUST_LOG=devops_mcp=info,tower_http=debug
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8890/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Remote access with basic auth for security
+      - "traefik.http.routers.mcp.rule=Host(`mcp.${DOMAIN}`) || HostRegexp(`{host:(mcp.localhost|mcp.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.mcp.entrypoints=web,websecure"
+      - "traefik.http.services.mcp.loadbalancer.server.port=8890"
+      - "traefik.http.routers.mcp.service=mcp"
+      - "traefik.http.routers.mcp.middlewares=basic-auth@file,api-rate-limit@file,security@file"
+
+  # Ollama Proxy Fortress - API Key Management & Security Gateway
+  ollama-proxy:
+    build:
+      context: ./ollama_proxy_server
+      dockerfile: Dockerfile.fixed
+    container_name: ollama-proxy-${DOMAIN_BASE}
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    environment:
+      # Core proxy settings
+      - HOST=0.0.0.0
+      - PORT=8080
+      - SECRET_KEY=${OLLAMA_PROXY_SECRET:-ollama-proxy-secret-key-change-me}
+      - ADMIN_PASSWORD=${OLLAMA_PROXY_PASSWORD:-secure-admin-password}
+      # Database configuration (PostgreSQL)
+      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@neon-postgres:5432/ollama_proxy
+      # Backend servers (MCP Server)
+      - OLLAMA_SERVERS=http://mcp-modules-rust:8890
+      # Redis for rate limiting (using existing service)
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis-nd-leopaska:6379/0
+      # Rate limiting
+      - GLOBAL_RATE_LIMIT=100
+      - BURST_RATE_LIMIT=200
+      # Security settings
+      - ENABLE_ANALYTICS=true
+      - LOG_LEVEL=INFO
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ollama_proxy_data:/data
+    depends_on:
+      neon-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    networks:
+      - llm_network
+    labels:
+      - "traefik.enable=true"
+      # Unified Ollama Proxy access (admin UI via Traefik HTTP)
+      - "traefik.http.routers.ollama-proxy-admin.rule=Host(`proxy-admin.${DOMAIN}`) || HostRegexp(`{host:(proxy-admin.localhost|proxy-admin.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.ollama-proxy-admin.entrypoints=web,websecure"
+      - "traefik.http.services.ollama-proxy-admin.loadbalancer.server.port=8080"
+      - "traefik.http.routers.ollama-proxy-admin.service=ollama-proxy-admin"
+      - "traefik.http.routers.ollama-proxy-admin.middlewares=basic-auth@file,admin-rate-limit@file,security@file"
+      # API gateway (Ollama + MCP) via Traefik HTTP
+      - "traefik.http.routers.ollama-proxy-api.rule=Host(`proxy-api.${DOMAIN}`) || HostRegexp(`{host:(proxy-api.localhost|proxy-api.lan|192\\.168\\..*|172\\..*|10\\..*)}`)"
+      - "traefik.http.routers.ollama-proxy-api.entrypoints=web,websecure"
+      - "traefik.http.services.ollama-proxy-api.loadbalancer.server.port=8080"
+      - "traefik.http.routers.ollama-proxy-api.service=ollama-proxy-api"
+      - "traefik.http.routers.ollama-proxy-api.middlewares=api-rate-limit@file,security@file"
+      # TCP exposure for Ollama traffic through the proxy (port 11434)
+      - "traefik.tcp.routers.ollama-proxy-tcp.rule=HostSNI(`ollama.${DOMAIN}`)"
+      - "traefik.tcp.routers.ollama-proxy-tcp.entrypoints=ollama-tcp"
+      - "traefik.tcp.services.ollama-proxy-tcp.loadbalancer.server.port=11434"
+      - "traefik.tcp.routers.ollama-proxy-tcp.service=ollama-proxy-tcp"
+
 # Volume configuration
 volumes:
   ollama_data:
@@ -1425,4 +1557,10 @@ volumes:
     driver_opts:
       type: none
       device: ${DATA_DIR:-/mnt/data}/jellyfin
+      o: bind
+  ollama_proxy_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /media/l3o/prod/docker/ollama-proxy
       o: bind

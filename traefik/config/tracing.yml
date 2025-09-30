@@ -1,0 +1,7 @@
+# Tracing configuration
+tracing:
+  jaeger:
+    samplingType: const
+    samplingParam: 1.0
+    localAgentHostPort: "127.0.0.1:6831"
+  serviceName: "traefik"

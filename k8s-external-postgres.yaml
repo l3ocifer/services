@@ -1,0 +1,23 @@
+# Using Endpoints for direct IP connection to Docker postgres
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: discoverlocal
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: postgres-service
+  namespace: discoverlocal
+subsets:
+- addresses:
+  - ip: 192.168.1.200  # Host machine IP where Docker postgres is exposed on port 5432
+  ports:
+  - port: 5432
+    protocol: TCP

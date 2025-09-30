@@ -1,0 +1,157 @@
+# Syncthing Global Ignore Patterns
+# Security-focused patterns for development environment sync
+
+# === SELF-HOSTED SECURITY ===
+# Since we control our own Syncthing infrastructure, we CAN sync sensitive files
+# But still exclude some system-specific or temporary sensitive files
+
+# Exclude only temporary credential files that shouldn't sync
+**/.env.tmp
+**/.env.backup
+**/secrets.tmp
+**/config.tmp
+
+# Still exclude some cloud provider session tokens (regenerated frequently)
+**/.aws/cli/cache/
+**/.gcloud/logs/
+**/.azure/logs/
+
+# === SYSTEM FILES ===
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Linux
+.directory
+.Trash-*
+
+# Windows  
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# === DEVELOPMENT ===
+# Version Control
+.git/
+.svn/
+.hg/
+.bzr/
+
+# IDE and Editors
+.vscode/settings.json
+.vscode/launch.json
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries/
+.idea/shelf/
+*.swp
+*.swo
+*~
+*.tmp
+
+# Dependencies
+node_modules/
+vendor/
+.npm/
+.yarn/
+.pnpm-store/
+__pycache__/
+*.pyc
+*.pyo
+.tox/
+venv/
+env/
+.venv/
+
+# Build outputs
+build/
+dist/
+out/
+target/
+bin/
+obj/
+*.o
+*.so
+*.dylib
+*.dll
+
+# === LARGE FILES ===
+# Media and binaries
+*.iso
+*.dmg
+*.img
+*.ova
+*.vmdk
+*.vdi
+*.qcow2
+*.mp4
+*.avi
+*.mkv
+*.mov
+
+# Archives
+*.zip
+*.tar.gz
+*.7z
+*.rar
+
+# === LOGS AND TEMP ===
+*.log
+crash.log
+debug.log
+*.tmp
+*.temp
+*.cache
+
+# === APPLICATION SPECIFIC ===
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate*
+*.tfplan
+
+# Kubernetes
+*.kubeconfig
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# === DIRECTORIES TO EXCLUDE ===
+# Large system directories
+/var/log/
+/tmp/
+/proc/
+/sys/
+/dev/
+
+# Package manager caches
+/var/cache/
+~/.cache/
+~/Library/Caches/
+
+# Application data that shouldn't sync
+~/Library/Application Support/
+~/.local/share/
+
+# Conda/Python environments (too large)
+~/miniconda3/envs/
+~/miniconda3/pkgs/
+~/anaconda3/envs/
+~/anaconda3/pkgs/
