@@ -28,7 +28,71 @@ storage:
     username: 'postgres'
 
 access_control:
-  default_policy: 'one_factor'
+  default_policy: 'deny'
+  rules:
+    # Admin-only services
+    - domain:
+        - 'traefik.leopaska.xyz'
+        - 'grafana.leopaska.xyz'
+        - 'prometheus.leopaska.xyz'
+        - 'pgadmin.leopaska.xyz'
+        - 'adminer.leopaska.xyz'
+        - 'whodb.leopaska.xyz'
+        - 'coolify.leopaska.xyz'
+      policy: 'two_factor'
+      subject:
+        - ['group:admins']
+    
+    # Protected productivity services - one factor
+    - domain:
+        - 'postiz.leopaska.xyz'
+        - 'n8n.leopaska.xyz'
+        - 'huginn.leopaska.xyz'
+        - 'homeassistant.leopaska.xyz'
+        - 'uptimekuma.leopaska.xyz'
+        - 'syncthing.leopaska.xyz'
+        - 'minio.leopaska.xyz'
+        - 'openwebui.leopaska.xyz'
+        - 'umami.leopaska.xyz'
+        - 'rustpad.leopaska.xyz'
+        - 'jellyfin.leopaska.xyz'
+        - 'spacedrive.leopaska.xyz'
+      policy: 'one_factor'
+      subject:
+        - ['group:admins']
+        - ['group:users']
+    
+    # Communication services
+    - domain:
+        - 'conduit.leopaska.xyz'
+        - 'element.leopaska.xyz'
+      policy: 'one_factor'
+      subject:
+        - ['group:admins']
+        - ['group:users']
+    
+    # Production K3s applications - one factor
+    - domain:
+        - 'localist.leopaska.xyz'
+        - 'potluck.leopaska.xyz'
+        - 'ae.leopaska.xyz'
+        - 'blink.leopaska.xyz'
+        - 'blink.weopaska.xyz'
+        - 'hyva.leopaska.xyz'
+        - 'ursulai.leopaska.xyz'
+        - 'omni.leopaska.xyz'
+        - 'authorworks.leopaska.xyz'
+        - 'api.authorworks.leopaska.xyz'
+      policy: 'one_factor'
+      subject:
+        - ['group:admins']
+        - ['group:users']
+    
+    # Public services - bypass (have own auth)
+    - domain:
+        - 'vaultwarden.leopaska.xyz'
+        - 'authelia.leopaska.xyz'
+      policy: 'bypass'
 
 notifier:
   filesystem:
