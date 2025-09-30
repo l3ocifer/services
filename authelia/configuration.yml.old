@@ -1,0 +1,104 @@
+---
+server:
+  address: 'tcp://:9091/'
+
+log:
+  level: 'info'
+
+identity_validation:
+  reset_password:
+    jwt_secret: 'antidisestablishmentarianism7'
+
+authentication_backend:
+  file:
+    path: '/config/users_database.yml'
+
+session:
+  secret: 'antidisestablishmentarianism7'
+  expiration: 1h
+  inactivity: 5m
+  remember_me: 1M
+  cookies:
+    - name: 'authelia_session'
+      domain: 'leopaska.xyz'
+      authelia_url: 'https://authelia.leopaska.xyz'
+      default_redirection_url: 'https://leopaska.xyz'
+
+storage:
+  encryption_key: 'antidisestablishmentarianism7'
+  postgres:
+    address: 'tcp://neon-postgres:5432'
+    database: 'authelia'
+    username: 'postgres'
+
+access_control:
+  default_policy: 'deny'
+  rules:
+    # Admin-only services
+    - domain:
+        - 'traefik.leopaska.xyz'
+        - 'grafana.leopaska.xyz'
+        - 'prometheus.leopaska.xyz'
+        - 'pgadmin.leopaska.xyz'
+        - 'adminer.leopaska.xyz'
+        - 'whodb.leopaska.xyz'
+        - 'coolify.leopaska.xyz'
+      policy: 'two_factor'
+      subject:
+        - ['group:admins']
+    
+    # Protected productivity services - one factor
+    - domain:
+        - 'postiz.leopaska.xyz'
+        - 'n8n.leopaska.xyz'
+        - 'huginn.leopaska.xyz'
+        - 'homeassistant.leopaska.xyz'
+        - 'uptimekuma.leopaska.xyz'
+        - 'syncthing.leopaska.xyz'
+        - 'minio.leopaska.xyz'
+        - 'openwebui.leopaska.xyz'
+        - 'umami.leopaska.xyz'
+        - 'rustpad.leopaska.xyz'
+        - 'jellyfin.leopaska.xyz'
+        - 'spacedrive.leopaska.xyz'
+      policy: 'one_factor'
+      subject:
+        - ['group:admins']
+        - ['group:users']
+    
+    # Communication services
+    - domain:
+        - 'conduit.leopaska.xyz'
+        - 'element.leopaska.xyz'
+      policy: 'one_factor'
+      subject:
+        - ['group:admins']
+        - ['group:users']
+    
+    # Production K3s applications - one factor
+    - domain:
+        - 'localist.leopaska.xyz'
+        - 'potluck.leopaska.xyz'
+        - 'ae.leopaska.xyz'
+        - 'blink.leopaska.xyz'
+        - 'hyva.leopaska.xyz'
+        - 'ursulai.leopaska.xyz'
+        - 'omni.leopaska.xyz'
+      policy: 'one_factor'
+      subject:
+        - ['group:admins']
+        - ['group:users']
+    
+    # Public services - bypass
+    - domain:
+        - 'vaultwarden.leopaska.xyz'
+      policy: 'bypass'
+    
+    # Security/Auth services - bypass (have own auth)
+    - domain:
+        - 'authelia.leopaska.xyz'
+      policy: 'bypass'
+
+notifier:
+  filesystem:
+    filename: '/config/notification.txt'

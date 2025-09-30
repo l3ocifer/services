@@ -23,7 +23,7 @@ session:
 storage:
   encryption_key: 'antidisestablishmentarianism7'
   postgres:
-    address: 'tcp://neon-postgres:5432'
+    address: 'tcp://neon-postgres-leopaska:5432'
     database: 'authelia'
     username: 'postgres'
 
@@ -33,3 +33,124 @@ access_control:
 notifier:
   filesystem:
     filename: '/config/notification.txt'
+
+# OpenID Connect Provider Configuration
+identity_providers:
+  oidc:
+    hmac_secret: 'antidisestablishmentarianism7-oidc'
+    jwks:
+      - key_id: 'main'
+        algorithm: 'RS256'
+        use: 'sig'
+        key: |
+          -----BEGIN PRIVATE KEY-----
+          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
+          1q9ewjNIvI1Yr7kgVkfU2bMwnQrYYRQg
+          -----END PRIVATE KEY-----
+    
+    # Clients (apps that will use Authelia for auth)
+    clients:
+      # HyvaPaska
+      - client_id: 'hyvapaska'
+        client_name: 'HyvaPaska E-commerce'
+        client_secret: '$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKk6Z8QMPj0s0lw4W5vR6OvCXRPbJL7cZmQqGJ7Q8kXK4LRXq7f9.DgECjJ6gOQ5ZyB8c4fQmg'
+        public: false
+        authorization_policy: 'one_factor'
+        redirect_uris:
+          - 'https://hyva.leopaska.xyz/api/auth/callback/authelia'
+          - 'http://localhost:3003/api/auth/callback/authelia'
+        scopes:
+          - 'openid'
+          - 'email'
+          - 'profile'
+          - 'groups'
+        grant_types:
+          - 'authorization_code'
+        response_types:
+          - 'code'
+        token_endpoint_auth_method: 'client_secret_post'
+      
+      # AuthorWorks
+      - client_id: 'authorworks'
+        client_name: 'AuthorWorks Platform'
+        client_secret: '$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKk6Z8QMPj0s0lw4W5vR6OvCXRPbJL7cZmQqGJ7Q8kXK4LRXq7f9.DgECjJ6gOQ5ZyB8c4fQmg'
+        public: false
+        authorization_policy: 'one_factor'
+        redirect_uris:
+          - 'https://authorworks.leopaska.xyz/api/auth/callback/authelia'
+        scopes:
+          - 'openid'
+          - 'email'
+          - 'profile'
+          - 'groups'
+        grant_types:
+          - 'authorization_code'
+        response_types:
+          - 'code'
+        token_endpoint_auth_method: 'client_secret_post'
+      
+      # Potluck
+      - client_id: 'potluck'
+        client_name: 'Potluck Platform'
+        client_secret: '$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKk6Z8QMPj0s0lw4W5vR6OvCXRPbJL7cZmQqGJ7Q8kXK4LRXq7f9.DgECjJ6gOQ5ZyB8c4fQmg'
+        public: false
+        authorization_policy: 'one_factor'
+        redirect_uris:
+          - 'https://potluck.leopaska.xyz/api/auth/callback/authelia'
+        scopes:
+          - 'openid'
+          - 'email'
+          - 'profile'
+        grant_types:
+          - 'authorization_code'
+        response_types:
+          - 'code'
+        token_endpoint_auth_method: 'client_secret_post'

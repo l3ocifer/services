@@ -1,6 +1,17 @@
 http:
   middlewares:
-    # Basic Authentication
+    # Authelia ForwardAuth
+    authelia:
+      forwardAuth:
+        address: 'http://authelia-leopaska:9091/api/authz/forward-auth'
+        trustForwardHeader: true
+        authResponseHeaders:
+          - 'Remote-User'
+          - 'Remote-Groups'
+          - 'Remote-Email'
+          - 'Remote-Name'
+    
+    # Basic Authentication (for services that bypass Authelia)
     basic-auth:
       basicAuth:
         users:
